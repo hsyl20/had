@@ -31,12 +31,17 @@ type Note   = Map Runner [Test]
 type Runner = Text
 
 data Test = Test
+   { testId    :: TestId
+   , testValue :: Natural
+   }
+   deriving (Show)
+
+data TestId = TestId
    { testName   :: Text
    , testWay    :: Text -- ^ "normal", "optasm", etc.
    , testMetric :: Metric
-   , testValue  :: Natural
    }
-   deriving (Show)
+   deriving (Show,Eq,Ord)
 
 data Metric
    = Metric !MetricTime !MetricDesc
@@ -84,10 +89,8 @@ app mstate request respond = case pathInfo request of
    ["note",obj] -> do
       res <- gitShowObject obj
       let note = parseNote res
-      respond $ responseLBS
-         status200
-         [("Content-Type", "text/plain")]
-         (Text.encodeUtf8 (Text.pack (show note)))
+          html = renderNote note
+      respond $ htmlResponse html
 
    _ -> respond $ notFound
 
@@ -104,20 +107,22 @@ htmlResponse html = responseLBS status200 [("Content-Type","text/html")] (render
 parseNote :: ByteString -> Note
 parseNote bs = Map.fromListWith (++)
    $ fmap (\[r,n,w,m,v] -> (Text.decodeUtf8 r, [Test
-                                 { testName = Text.decodeUtf8 n
-                                 , testWay  = Text.decodeUtf8 w
-                                 , testMetric = case LBS.split (fromIntegral (ord '/')) m of
-                                       [tim,desc] -> Metric
-                                                      (case tim of
-                                                         "runtime"      -> Runtime
-                                                         "compile_time" -> CompileTime
-                                                         _              -> error ("Invalid metric time: " <> show tim))
-                                                      (case desc of
-                                                         "bytes allocated"          -> BytesAlloc
-                                                         "max_bytes_used"           -> MaxBytesUsed
-                                                         "peak_megabytes_allocated" -> PeakMegabytesAlloc
-                                                         _                          -> error ("Invalid metric: " <> show desc))
-                                       _         -> error ("Invalid metric: " <> show m)
+                                 { testId = TestId
+                                    { testName = Text.decodeUtf8 n
+                                    , testWay  = Text.decodeUtf8 w
+                                    , testMetric = case LBS.split (fromIntegral (ord '/')) m of
+                                          [tim,desc] -> Metric
+                                                         (case tim of
+                                                            "runtime"      -> Runtime
+                                                            "compile_time" -> CompileTime
+                                                            _              -> error ("Invalid metric time: " <> show tim))
+                                                         (case desc of
+                                                            "bytes allocated"          -> BytesAlloc
+                                                            "max_bytes_used"           -> MaxBytesUsed
+                                                            "peak_megabytes_allocated" -> PeakMegabytesAlloc
+                                                            _                          -> error ("Invalid metric: " <> show desc))
+                                          _         -> error ("Invalid metric: " <> show m)
+                                    }
                                  , testValue = case LBS.readInteger v of
                                     Nothing -> error ("Invalid metric value: " <> show v)
                                     Just (x,_)  -> fromIntegral x
@@ -152,6 +157,12 @@ renderCommitList state ids = do
                      a_ [href_ $ "/show/" <> Text.toStrict note_id'] $ do
                         toHtmlRaw $ note_id'
                   Nothing -> "None"
+
+renderNote :: Note -> Html ()
+renderNote note = do
+   forM_ (Map.toList note) $ \(runner,tests) -> do
+      h2_ (toHtml runner)
+      toHtml (show tests)
 
 --------------------------------------
 -- Git stuff
