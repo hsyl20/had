@@ -153,6 +153,15 @@ app :: MVar State -> Application
 app mstate request respond = case pathInfo request of
    [] -> do
       state <- readMVar mstate
+      let html = do
+            h1_ "Runners"
+            renderAllRunners state
+            h1_ "Misc"
+            a_ [href_ "/commits"] "Recent commits"
+      respond $ htmlResponse html
+
+   ["commits"] -> do
+      state <- readMVar mstate
       let html = renderCommitList state
       respond $ htmlResponse html
 
@@ -179,11 +188,6 @@ app mstate request respond = case pathInfo request of
       res <- gitShowObject obj
       let note = parseNote (Text.fromStrict obj) res
           html = renderNote note
-      respond $ htmlResponse html
-
-   ["chart"] -> do
-      state <- readMVar mstate
-      let html = renderAllRunners state
       respond $ htmlResponse html
 
    ["chart",runner] -> do
@@ -316,10 +320,10 @@ renderCommitChart state runner = do
          h3_ (toHtml (showTestId tid))
          div_ $ canvas_
             [ id_ (Text.toStrict chart_id)
-            , style_ $ "width: 95%; height: " <> (Text.toStrict $ Text.pack $ show $ 5 + fromIntegral (length values) * (1.2 :: Float)) <> "em"
+            --, style_ $ "width: " <> (Text.toStrict $ Text.pack $ show $ 5 + fromIntegral (length values) * (1.2 :: Float)) <> "em"
             ] mempty
          let chrt = "new Chart(document.getElementById('" <> chart_id <> "'), {\
-                    \   type: 'horizontalBar',\
+                    \   type: 'bar',\
                     \   data: {\
                     \      labels: " <> Text.pack (show labels) <> ",\
                     \      datasets: [{\
@@ -332,7 +336,7 @@ renderCommitChart state runner = do
                     \   options: {\
                     \      maintainAspectRatio: false,\
                     \      scales: {\
-                    \         xAxes: [{ type: 'linear', ticks: {beginAtZero: true}}]\
+                    \         yAxes: [{ type: 'linear', ticks: {beginAtZero: true}}]\
                     \      }\
                     \   }\
                     \});"
@@ -353,7 +357,8 @@ renderNote note = do
                  \      labels: " <> Text.pack (show (fmap showTestId (Map.keys tests))) <> ",\
                  \      datasets: [{\
                  \         label: 'Value',\
-                 \         data: " <> Text.pack (show (Map.toList tests)) <> ",\
+                 \         data: " <> Text.pack (show (Map.elems tests)) <> ",\
+                 \         backgroundColor: 'rgba(255,0,0,0.5)'\
                  \         }]\
                  \   },\
                  \   options: {\
