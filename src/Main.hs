@@ -29,6 +29,7 @@ import Data.Text.Lazy (Text)
 import Lucid
 import Numeric.Natural
 import Data.FileEmbed
+import Data.Maybe
 import qualified Data.List as List
 
 chartJs :: BS.ByteString
@@ -101,7 +102,7 @@ main = do
    putStrLn $ "http://localhost:8080/"
 
    putStrLn "Reading current state..."
-   state <- newState 100
+   state <- newState 1000
    mstate <- newMVar state
    putStrLn "Done."
    run 8080 (app mstate)
@@ -238,14 +239,13 @@ parseNote nid bs = Note nid
                                                             "bytes allocated"          -> BytesAlloc
                                                             "max_bytes_used"           -> MaxBytesUsed
                                                             "peak_megabytes_allocated" -> PeakMegabytesAlloc
-                                                            _                          -> error ("Invalid metric: " <> show desc))
-                                          _         -> error ("Invalid metric: " <> show m)
+                                                            _                          -> error ("Invalid metric desc: " <> show desc))
+                                          _         -> error ("Invalid metric: " <> show m <> ", ID: " <> show nid)
                                     })
                                  ( case LBS.readInteger v of
                                     Nothing -> error ("Invalid metric value: " <> show v)
                                     Just (x,_)  -> fromIntegral x
                                  )))
-                                       
    $ filter (not . null)
    $ fmap (LBS.split (fromIntegral (ord '\t')))
    $ LBS.split (fromIntegral (ord '\n')) bs
@@ -275,57 +275,68 @@ renderCommitList state = do
 
 renderAllRunners :: State -> Html ()
 renderAllRunners state = do
-   forM_ (stateRunners state) \runner -> do
-      a_ [href_ $ "/chart/" <> Text.toStrict runner] (toHtml runner)
+   ul_ $ forM_ (stateRunners state) \runner -> do
+      li_ $ a_ [href_ $ "/chart/" <> Text.toStrict runner] (toHtml runner)
 
 renderCommitChart :: State -> Runner -> Html ()
 renderCommitChart state runner = do
    let notes  = stateNotes state
        ids    = fmap fst (stateLastCommits state)
        tids   = stateTestIds state
-       labels = fmap show ids
 
    h2_ (toHtml runner)
    forM_ tids $ \tid -> do
-      h2_ (toHtml (showTestId tid))
       let chart_id = "chart-" <> showTestId tid <> "-" <> runner
           lookup_value cid = case Map.lookup cid notes of
-            Nothing   -> 0 -- no perf report for the commit
+            Nothing   -> Nothing -- no perf report for the commit
             Just note -> case Map.lookup runner (noteTests note) of
-               Nothing -> 0 -- no result for this runner
+               Nothing -> Nothing -- no result for this runner
                Just ts -> case Map.lookup tid ts of
-                  Nothing -> 0 -- no result for this test
-                  Just v  -> v
-          values = fmap lookup_value ids
+                  Nothing -> Nothing -- no result for this test
+                  Just v  -> Just (cid,v)
+          labelledValues = reverse $ catMaybes (fmap lookup_value ids)
           valueName = showTestId tid
 
-      div_ $ canvas_
-         [ id_ (Text.toStrict chart_id)
-         , style_ $ "width: 95%; height: 400px;"
-         ] mempty
-      let chrt = "new Chart(document.getElementById('" <> chart_id <> "'), {\
-                 \   type: 'line',\
-                 \   data: {\
-                 \      labels: " <> Text.pack (show labels) <> ",\
-                 \      datasets: [{\
-                 \         label: '"<> valueName <> "',\
-                 \         data: " <> Text.pack (show values) <> ",\
-                 \         cubicInterpolationMode: 'monotone'\
-                 \         }]\
-                 \   },\
-                 \   options: {\
-                 \      maintainAspectRatio: false,\
-                 \      scales: {\
-                 \         yAxes: [{ type: 'linear'}]\
-                 \      },\
-                 \      legend: {\
-                 \         labels: {\
-                 \            fontSize: 6\
-                 \         }\
-                 \      }\
-                 \   }\
-                 \});"
-      script_ (Text.toStrict chrt)
+      unless (null labelledValues) do
+
+         let
+            -- filter successive values with less than 1% change
+            go _ []     = []
+            go _ [b]    = [b] -- keep the last value
+            go a (b:bs)
+               | valueA <- fromIntegral (snd a)
+               , valueB <- fromIntegral (snd b)
+               , abs ((valueA - valueB) / (valueA :: Rational)) > 0.5 -- > 0.5%
+               = b : go b bs
+               | otherwise
+               = go a bs -- keep "a" as the baseline
+
+            (labels,values) = unzip $ head labelledValues : go (head labelledValues) (tail labelledValues)
+
+         h3_ (toHtml (showTestId tid))
+         div_ $ canvas_
+            [ id_ (Text.toStrict chart_id)
+            , style_ $ "width: 95%; height: " <> (Text.toStrict $ Text.pack $ show $ 5 + fromIntegral (length values) * (1.2 :: Float)) <> "em"
+            ] mempty
+         let chrt = "new Chart(document.getElementById('" <> chart_id <> "'), {\
+                    \   type: 'horizontalBar',\
+                    \   data: {\
+                    \      labels: " <> Text.pack (show labels) <> ",\
+                    \      datasets: [{\
+                    \         label: '"<> valueName <> "',\
+                    \         data: " <> Text.pack (show values) <> ",\
+                    \         cubicInterpolationMode: 'monotone',\
+                    \         backgroundColor: 'rgba(255,0,0,0.5)'\
+                    \         }]\
+                    \   },\
+                    \   options: {\
+                    \      maintainAspectRatio: false,\
+                    \      scales: {\
+                    \         xAxes: [{ type: 'linear', ticks: {beginAtZero: true}}]\
+                    \      }\
+                    \   }\
+                    \});"
+         script_ (Text.toStrict chrt)
 
 renderNote :: Note -> Html ()
 renderNote note = do
