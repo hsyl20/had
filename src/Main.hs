@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE BlockArguments #-}
 
 module Main where
 
@@ -76,7 +77,8 @@ app mstate request respond = case pathInfo request of
    [] -> do
       last_ids <- gitLastCommits 100
       state <- readMVar mstate
-      let html = renderCommitList state last_ids
+      summaries <- forM last_ids gitObjectSummary
+      let html = renderCommitList state (last_ids `zip` summaries)
       respond $ htmlResponse html
 
    ["show",obj] -> do
@@ -137,26 +139,24 @@ parseNote bs = Map.fromListWith (++)
 -- Rendering
 --------------------------------------
 
-renderCommitList :: State -> [ID] -> Html ()
+renderCommitList :: State -> [(ID,Text)] -> Html ()
 renderCommitList state ids = do
-   table_ $ do
-      let notes = stateNotes state
-      tr_ $ do
-         th_ "Commit"
-         th_ "Perf note"
-      forM_ ids $ \cid -> do
-         let cid'   = Text.decodeUtf8 cid
-         tr_ $ do
-            td_ $ do
-               a_ [href_ $ "/show/" <> Text.toStrict cid'] $ do
-                  toHtmlRaw $ cid'
-            td_ $ do
-               case Map.lookup cid notes of
-                  Just note_id -> do
-                     let note_id' = Text.decodeUtf8 note_id
-                     a_ [href_ $ "/show/" <> Text.toStrict note_id'] $ do
-                        toHtmlRaw $ note_id'
-                  Nothing -> "None"
+   let notes = stateNotes state
+   forM_ ids $ \(cid,summary) -> do
+      let cid'   = Text.decodeUtf8 cid
+      pre_ do
+         toHtml summary
+      div_ do
+         a_ [href_ $ "/show/" <> Text.toStrict cid'] $ "Diff"
+         " - "
+         case Map.lookup cid notes of
+            Just note_id -> do
+               let note_id' = Text.decodeUtf8 note_id
+               a_ [href_ $ "/show/" <> Text.toStrict note_id'] $ "Perf"
+            Nothing -> "Perf report not available"
+         " - "
+         a_ [href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid'] $ "Gitlab"
+      hr_ []
 
 renderNote :: Note -> Html ()
 renderNote note = do
@@ -196,3 +196,9 @@ gitShowObject :: Show a => a -> IO ByteString
 gitShowObject obj = do
    (_exitCode,res,_err) <- readProcess (shell ("git show " <> show obj))
    return res
+
+gitObjectSummary :: ID -> IO Text
+gitObjectSummary obj = do
+   let cmd = shell ("git show --summary --decorate=no " <> show obj)
+   (_exitCode,res,_err) <- readProcess cmd
+   return $ Text.decodeUtf8 res
