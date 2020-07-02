@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Main where
 
@@ -13,6 +14,7 @@ import System.Process.Typed
 import Data.Char
 import Control.Concurrent.MVar
 import Control.Monad
+import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy.Char8 as LBS (readInteger)
 import Data.ByteString.Lazy (ByteString)
@@ -23,6 +25,13 @@ import qualified Data.Text.Lazy as Text
 import Data.Text.Lazy (Text)
 import Lucid
 import Numeric.Natural
+import Data.FileEmbed
+
+chartJs :: BS.ByteString
+chartJs = $(embedFile "static/Chart.bundle.min.js")
+
+chartCss :: BS.ByteString
+chartCss = $(embedFile "static/Chart.css")
 
 data State = State
    { stateNotes :: Map ID ID
@@ -43,6 +52,27 @@ data TestId = TestId
    , testMetric :: Metric
    }
    deriving (Show,Eq,Ord)
+
+showTestId :: TestId -> Text
+showTestId tid = mconcat
+   [ testName tid
+   , " / "
+   , testWay tid
+   , " / "
+   , showMetric (testMetric tid)
+   ]
+
+showMetric :: Metric -> Text
+showMetric (Metric t d) = mconcat
+   [ case t of
+      CompileTime -> "compilation"
+      Runtime     -> "execution"
+   , " / "
+   , case d of
+      BytesAlloc         -> "bytes allocated"
+      PeakMegabytesAlloc -> "peak megabytes"
+      MaxBytesUsed       -> "max bytes used"
+   ]
 
 data Metric
    = Metric !MetricTime !MetricDesc
@@ -81,6 +111,18 @@ app mstate request respond = case pathInfo request of
       let html = renderCommitList state (last_ids `zip` summaries)
       respond $ htmlResponse html
 
+   ["script","chart.js"] -> do
+      respond $ responseLBS
+         status200
+         [("Content-Type", "text/javascript")]
+         (LBS.fromStrict chartJs)
+
+   ["style","chart.css"] -> do
+      respond $ responseLBS
+         status200
+         [("Content-Type", "text/css")]
+         (LBS.fromStrict chartCss)
+
    ["show",obj] -> do
       res <- gitShowObject obj
       respond $ responseLBS
@@ -102,8 +144,27 @@ notFound = responseLBS
     [("Content-Type", "text/plain")]
     "404 - Not Found"
 
+-- | Add HTML headers and stuff
+htmlWrap :: Html () -> Html ()
+htmlWrap body = do
+   html_ do
+      head_ do
+         title_ "HAD"
+         meta_ [ httpEquiv_ "Content-Type"
+               , content_   "text/html;charset=utf-8"
+               ]
+
+         -- chart.js
+         script_ [src_ "/script/chart.js"] ("" :: String)
+         link_ [ rel_  "stylesheet"
+               , type_ "text/css"
+               , href_ "style/chart.css"
+               ]
+      body_ body
+
+
 htmlResponse :: Html () -> Response
-htmlResponse html = responseLBS status200 [("Content-Type","text/html")] (renderBS html)
+htmlResponse html = responseLBS status200 [("Content-Type","text/html")] (renderBS (htmlWrap html))
 
 
 parseNote :: ByteString -> Note
@@ -152,7 +213,7 @@ renderCommitList state ids = do
          case Map.lookup cid notes of
             Just note_id -> do
                let note_id' = Text.decodeUtf8 note_id
-               a_ [href_ $ "/show/" <> Text.toStrict note_id'] $ "Perf"
+               a_ [href_ $ "/note/" <> Text.toStrict note_id'] $ "Perf report"
             Nothing -> "Perf report not available"
          " - "
          a_ [href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid'] $ "Gitlab"
@@ -162,7 +223,28 @@ renderNote :: Note -> Html ()
 renderNote note = do
    forM_ (Map.toList note) $ \(runner,tests) -> do
       h2_ (toHtml runner)
-      toHtml (show tests)
+      let chart_id = "chart-" <> runner
+      div_ $ canvas_
+         [ id_ (Text.toStrict chart_id)
+         , style_ $ "width: 95%; height: " <> (Text.toStrict $ Text.pack $ show $ fromIntegral (length tests) * (1.2 :: Float)) <> "em"
+         ] mempty
+      let chrt = "new Chart(document.getElementById('" <> chart_id <> "'), {\
+                 \   type: 'horizontalBar',\
+                 \   data: {\
+                 \      labels: " <> Text.pack (show (fmap (showTestId . testId) tests)) <> ",\
+                 \      datasets: [{\
+                 \         label: 'Value',\
+                 \         data: " <> Text.pack (show (fmap testValue tests)) <> ",\
+                 \         }]\
+                 \   },\
+                 \   options: {\
+                 \      maintainAspectRatio: false,\
+                 \      scales: {\
+                 \         xAxes: [{ type: 'logarithmic'}]\
+                 \      }\
+                 \   }\
+                 \});"
+      script_ (Text.toStrict chrt)
 
 --------------------------------------
 -- Git stuff

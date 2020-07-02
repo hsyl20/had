@@ -24,6 +24,7 @@ dependencies:
 - containers
 - bytestring
 - text
+- file-embed
 
 executables:
   had:
