@@ -2,6 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Main where
 
@@ -19,13 +20,16 @@ import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Lazy.Char8 as LBS (readInteger)
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.Map as Map
+import qualified Data.Map.Lazy as LMap
 import Data.Map (Map)
+import qualified Data.Set as Set
 import qualified Data.Text.Lazy.Encoding as Text
 import qualified Data.Text.Lazy as Text
 import Data.Text.Lazy (Text)
 import Lucid
 import Numeric.Natural
 import Data.FileEmbed
+import qualified Data.List as List
 
 chartJs :: BS.ByteString
 chartJs = $(embedFile "static/Chart.bundle.min.js")
@@ -34,24 +38,25 @@ chartCss :: BS.ByteString
 chartCss = $(embedFile "static/Chart.css")
 
 data State = State
-   { stateNotes :: Map ID ID
+   { stateNotes       :: LMap.Map ID Note -- ^ All the notes (Map commit note)
+   , stateLastCommits :: [(ID,Text)]      -- ^ Last commits and their summary
+   , stateTestIds     :: [TestId]         -- ^ All the test IDs we've found
+   , stateRunners     :: [Runner]         -- ^ All the runners we've found
    }
 
-type Note   = Map Runner [Test]
+data Note = Note
+   { noteId    :: ID
+   , noteTests :: Map Runner (Map TestId Natural)
+   }
+
 type Runner = Text
-
-data Test = Test
-   { testId    :: TestId
-   , testValue :: Natural
-   }
-   deriving (Show)
 
 data TestId = TestId
    { testName   :: Text
    , testWay    :: Text -- ^ "normal", "optasm", etc.
    , testMetric :: Metric
    }
-   deriving (Show,Eq,Ord)
+   deriving (Show,Eq,Ord,Read)
 
 showTestId :: TestId -> Text
 showTestId tid = mconcat
@@ -76,39 +81,78 @@ showMetric (Metric t d) = mconcat
 
 data Metric
    = Metric !MetricTime !MetricDesc
-   deriving (Show,Eq,Ord)
+   deriving (Show,Eq,Ord,Read)
 
 data MetricDesc
    = BytesAlloc
    | PeakMegabytesAlloc
    | MaxBytesUsed
-   deriving (Show,Eq,Ord)
+   deriving (Show,Eq,Ord,Read)
 
 data MetricTime
    = CompileTime
    | Runtime
-   deriving (Show,Eq,Ord)
+   deriving (Show,Eq,Ord,Read)
 
-type ID = ByteString
+type ID = Text
 
 main :: IO ()
 main = do
-    putStrLn $ "http://localhost:8080/"
-    gitUpdateNotes
-    notes <- gitReadNotes
-    let state = State
-         { stateNotes = notes
-         }
-    mstate <- newMVar state
-    run 8080 (app mstate)
+   putStrLn $ "http://localhost:8080/"
+
+   putStrLn "Reading current state..."
+   state <- newState 100
+   mstate <- newMVar state
+   putStrLn "Done."
+   run 8080 (app mstate)
+
+newState :: Word -> IO State
+newState ncommits = do
+   --putStrLn "Fetch origin..."
+   --gitFetchOrigin
+   putStrLn $ "Get last " <> show ncommits <> " commits..."
+   last_ids <- gitLastCommits ncommits
+   summaries <- forM last_ids gitObjectSummary
+   let lasts = last_ids `zip` summaries
+
+   putStrLn "Fetch perf notes..."
+   gitUpdateNotes
+   putStrLn "Read perf notes..."
+   notes_map <- gitReadNotesMap
+   let !last_ids_set = Set.fromList last_ids
+   let !last_notes_map = Map.restrictKeys notes_map last_ids_set
+   notes <- forM last_notes_map $ \nid -> do
+      res <- gitShowObject nid
+      return $ parseNote nid res
+
+   putStrLn "Gather all test IDs..."
+   let !test_ids = List.nub
+                     $ List.sort
+                     $ concat $ concat
+                     $ fmap (fmap Map.keys . Map.elems . noteTests)
+                     $ Map.elems notes
+
+   putStrLn "Gather all runners..."
+   let !runners = List.nub
+                     $ List.sort
+                     $ concat
+                     $ fmap (Map.keys . noteTests)
+                     $ Map.elems notes
+
+   let state = State
+        { stateNotes       = notes
+        , stateLastCommits = lasts
+        , stateTestIds     = test_ids
+        , stateRunners     = runners
+        }
+   putStrLn "Update done."
+   return state
 
 app :: MVar State -> Application
 app mstate request respond = case pathInfo request of
    [] -> do
-      last_ids <- gitLastCommits 100
       state <- readMVar mstate
-      summaries <- forM last_ids gitObjectSummary
-      let html = renderCommitList state (last_ids `zip` summaries)
+      let html = renderCommitList state
       respond $ htmlResponse html
 
    ["script","chart.js"] -> do
@@ -132,8 +176,18 @@ app mstate request respond = case pathInfo request of
 
    ["note",obj] -> do
       res <- gitShowObject obj
-      let note = parseNote res
+      let note = parseNote (Text.fromStrict obj) res
           html = renderNote note
+      respond $ htmlResponse html
+
+   ["chart"] -> do
+      state <- readMVar mstate
+      let html = renderAllRunners state
+      respond $ htmlResponse html
+
+   ["chart",runner] -> do
+      state <- readMVar mstate
+      let html = renderCommitChart state (Text.fromStrict runner)
       respond $ htmlResponse html
 
    _ -> respond $ notFound
@@ -167,10 +221,11 @@ htmlResponse :: Html () -> Response
 htmlResponse html = responseLBS status200 [("Content-Type","text/html")] (renderBS (htmlWrap html))
 
 
-parseNote :: ByteString -> Note
-parseNote bs = Map.fromListWith (++)
-   $ fmap (\[r,n,w,m,v] -> (Text.decodeUtf8 r, [Test
-                                 { testId = TestId
+parseNote :: ID -> ByteString -> Note
+parseNote nid bs = Note nid
+   $ Map.fromListWith (Map.union)
+   $ fmap (\[r,n,w,m,v] -> (Text.decodeUtf8 r, Map.singleton
+                                 ( TestId
                                     { testName = Text.decodeUtf8 n
                                     , testWay  = Text.decodeUtf8 w
                                     , testMetric = case LBS.split (fromIntegral (ord '/')) m of
@@ -185,11 +240,11 @@ parseNote bs = Map.fromListWith (++)
                                                             "peak_megabytes_allocated" -> PeakMegabytesAlloc
                                                             _                          -> error ("Invalid metric: " <> show desc))
                                           _         -> error ("Invalid metric: " <> show m)
-                                    }
-                                 , testValue = case LBS.readInteger v of
+                                    })
+                                 ( case LBS.readInteger v of
                                     Nothing -> error ("Invalid metric value: " <> show v)
                                     Just (x,_)  -> fromIntegral x
-                                 }]))
+                                 )))
                                        
    $ filter (not . null)
    $ fmap (LBS.split (fromIntegral (ord '\t')))
@@ -200,28 +255,81 @@ parseNote bs = Map.fromListWith (++)
 -- Rendering
 --------------------------------------
 
-renderCommitList :: State -> [(ID,Text)] -> Html ()
-renderCommitList state ids = do
+renderCommitList :: State -> Html ()
+renderCommitList state = do
    let notes = stateNotes state
+       ids   = stateLastCommits state
    forM_ ids $ \(cid,summary) -> do
-      let cid'   = Text.decodeUtf8 cid
       pre_ do
          toHtml summary
       div_ do
-         a_ [href_ $ "/show/" <> Text.toStrict cid'] $ "Diff"
+         a_ [href_ $ "/show/" <> Text.toStrict cid] $ "Diff"
          " - "
          case Map.lookup cid notes of
-            Just note_id -> do
-               let note_id' = Text.decodeUtf8 note_id
-               a_ [href_ $ "/note/" <> Text.toStrict note_id'] $ "Perf report"
+            Just (Note note_id _) -> do
+               a_ [href_ $ "/note/" <> Text.toStrict note_id] $ "Perf report"
             Nothing -> "Perf report not available"
          " - "
-         a_ [href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid'] $ "Gitlab"
+         a_ [href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid] $ "Gitlab"
       hr_ []
+
+renderAllRunners :: State -> Html ()
+renderAllRunners state = do
+   forM_ (stateRunners state) \runner -> do
+      a_ [href_ $ "/chart/" <> Text.toStrict runner] (toHtml runner)
+
+renderCommitChart :: State -> Runner -> Html ()
+renderCommitChart state runner = do
+   let notes  = stateNotes state
+       ids    = fmap fst (stateLastCommits state)
+       tids   = stateTestIds state
+       labels = fmap show ids
+
+   h2_ (toHtml runner)
+   forM_ tids $ \tid -> do
+      h2_ (toHtml (showTestId tid))
+      let chart_id = "chart-" <> showTestId tid <> "-" <> runner
+          lookup_value cid = case Map.lookup cid notes of
+            Nothing   -> 0 -- no perf report for the commit
+            Just note -> case Map.lookup runner (noteTests note) of
+               Nothing -> 0 -- no result for this runner
+               Just ts -> case Map.lookup tid ts of
+                  Nothing -> 0 -- no result for this test
+                  Just v  -> v
+          values = fmap lookup_value ids
+          valueName = showTestId tid
+
+      div_ $ canvas_
+         [ id_ (Text.toStrict chart_id)
+         , style_ $ "width: 95%; height: 400px;"
+         ] mempty
+      let chrt = "new Chart(document.getElementById('" <> chart_id <> "'), {\
+                 \   type: 'line',\
+                 \   data: {\
+                 \      labels: " <> Text.pack (show labels) <> ",\
+                 \      datasets: [{\
+                 \         label: '"<> valueName <> "',\
+                 \         data: " <> Text.pack (show values) <> ",\
+                 \         cubicInterpolationMode: 'monotone'\
+                 \         }]\
+                 \   },\
+                 \   options: {\
+                 \      maintainAspectRatio: false,\
+                 \      scales: {\
+                 \         yAxes: [{ type: 'linear'}]\
+                 \      },\
+                 \      legend: {\
+                 \         labels: {\
+                 \            fontSize: 6\
+                 \         }\
+                 \      }\
+                 \   }\
+                 \});"
+      script_ (Text.toStrict chrt)
 
 renderNote :: Note -> Html ()
 renderNote note = do
-   forM_ (Map.toList note) $ \(runner,tests) -> do
+   forM_ (Map.toList (noteTests note)) $ \(runner,tests) -> do
       h2_ (toHtml runner)
       let chart_id = "chart-" <> runner
       div_ $ canvas_
@@ -231,10 +339,10 @@ renderNote note = do
       let chrt = "new Chart(document.getElementById('" <> chart_id <> "'), {\
                  \   type: 'horizontalBar',\
                  \   data: {\
-                 \      labels: " <> Text.pack (show (fmap (showTestId . testId) tests)) <> ",\
+                 \      labels: " <> Text.pack (show (fmap showTestId (Map.keys tests))) <> ",\
                  \      datasets: [{\
                  \         label: 'Value',\
-                 \         data: " <> Text.pack (show (fmap testValue tests)) <> ",\
+                 \         data: " <> Text.pack (show (Map.toList tests)) <> ",\
                  \         }]\
                  \   },\
                  \   options: {\
@@ -251,11 +359,11 @@ renderNote note = do
 --------------------------------------
 
 -- | Read performance notes from Git
-gitReadNotes :: IO (Map ID ID)
-gitReadNotes = do
+gitReadNotesMap :: IO (Map ID ID)
+gitReadNotesMap = do
    (_exitCode,res,_err) <- readProcess "git notes --ref=ci/perf"
    return $ Map.fromList
-          $ fmap (\[a,b] -> (b,a)) -- one note per commit?
+          $ fmap (\[a,b] -> (Text.decodeUtf8 b, Text.decodeUtf8 a)) -- one note per commit?
           $ filter (not . null)
           $ fmap (LBS.split (fromIntegral (ord ' ')))
           $ LBS.split (fromIntegral (ord '\n')) res
@@ -267,12 +375,19 @@ gitUpdateNotes = do
    (_exitCode,_res,_err) <- readProcess cmd
    return ()
 
+-- | Update branch from origin
+gitFetchOrigin :: IO ()
+gitFetchOrigin = do
+   let cmd = shell ("git fetch origin")
+   (_exitCode,_res,_err) <- readProcess cmd
+   return ()
+
 -- | Return last N commit IDs from "origin/master"
 gitLastCommits :: Word -> IO [ID]
 gitLastCommits n = do
    let cmd = shell ("git log --pretty=%H origin/master -" <> show n)
    (_exitCode,res,_err) <- readProcess cmd
-   return $ LBS.split (fromIntegral (ord '\n')) res
+   return $ fmap Text.decodeUtf8 $ LBS.split (fromIntegral (ord '\n')) res
 
 gitShowObject :: Show a => a -> IO ByteString
 gitShowObject obj = do
