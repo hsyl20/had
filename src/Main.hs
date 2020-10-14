@@ -97,12 +97,20 @@ data MetricTime
 
 type ID = Text
 
+commit_count:: Word
+commit_count = 1000
+   -- don't set this number too high because older note format isn't supported:
+   -- metrics for the compiler and for the test programs were mixed
+
+change_ratio :: Rational
+change_ratio = 0.005 -- 0.5%
+
 main :: IO ()
 main = do
    putStrLn $ "http://localhost:8080/"
 
    putStrLn "Reading current state..."
-   state <- newState 2000
+   state <- newState commit_count
    mstate <- newMVar state
    putStrLn "Done."
    run 8080 (app mstate)
@@ -279,13 +287,14 @@ renderCommitList state = do
    let ids   = stateLastCommits state
    forM_ ids $ \c -> do
       renderCommit state c
-      hr_ []
+      hr_ [style_ "border: 5px solid green; border-radius: 4px; margin-top:20px; margin-bottom: 20px"]
 
 renderCommit :: State -> (ID,Text) -> Html ()
 renderCommit state (cid,summary) = do
    let notes = stateNotes state
    pre_ do
       toHtml summary
+   hr_ []
    div_ do
       a_ [href_ $ "/show/" <> Text.toStrict cid] $ "Diff"
       " - "
@@ -318,7 +327,7 @@ renderCommitChart state runner = do
       \  }\n\
       \  else {\n\
       \     var data = tooltip.dataPoints[0];\n\
-      \     fetch('/commit/'+data.label).then((res) => { return res.text(); }).then((html) => tt.innerHTML = \"Value: \" + data.value + \"<br/><br/>\" + html);\n\
+      \     fetch('/commit/'+data.label).then((res) => { return res.text(); }).then((html) => tt.innerHTML = \"Value: \" + data.value + \"<hr/>\" + html);\n\
       \  }\n\
       \}"
 
@@ -347,7 +356,7 @@ renderCommitChart state runner = do
                   go a (b:bs)
                      | valueA <- fromIntegral (snd a)
                      , valueB <- fromIntegral (snd b)
-                     , abs ((valueA - valueB) / (valueA :: Rational)) > 0.005 -- > 0.5%
+                     , abs ((valueA - valueB) / (valueA :: Rational)) > change_ratio
                      = a : go b bs
                      | otherwise
                      = go a bs -- keep "a" as the baseline
@@ -398,6 +407,20 @@ renderCommitChart state runner = do
       div_ [ id_ "rightPane"
            , style_ "height: 100vh; flex-basis:30vw; overflow-y: auto; background-color:antiquewhite; resize:horizontal"
            ] do
+         "Notes:"
+         ul_ do
+            li_ do
+               "Only the latest "
+               toHtml (show commit_count)
+               " commits are taken into account."
+            li_ do
+               "Only commits with absolute metric change > "
+               toHtml (show (fromRational (change_ratio * 100) :: Float))
+               "% are displayed"
+            li_ do
+               "Some commits don't have recorded perf changes, so their metric changes (if any) are only visible in the next commit with recorded perf changes! You can see commits without perf reports "
+               a_ [href_ "/commits"] "here"
+         hr_ []
          div_ [ id_ "tooltip"
               , style_ "width: 100%"
               ] ""
