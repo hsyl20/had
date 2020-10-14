@@ -352,7 +352,7 @@ renderCommitChart state runner = do
             unless (null labelledValues) do
 
                let
-                  -- filter successive values with less than 1% change
+                  -- filter successive values with less than change_ratio change
                   go _ []     = []
                   go _ [b]    = [b] -- keep the last value
                   go a (b:bs)
