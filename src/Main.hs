@@ -242,7 +242,7 @@ htmlWrap body = do
          script_ [src_ "/script/chart.js"] ("" :: String)
          link_ [ rel_  "stylesheet"
                , type_ "text/css"
-               , href_ "style/chart.css"
+               , href_ "/style/chart.css"
                ]
       body_ [style_ "padding: 0px; margin: 0px"] body
 
