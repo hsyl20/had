@@ -102,7 +102,7 @@ main = do
    putStrLn $ "http://localhost:8080/"
 
    putStrLn "Reading current state..."
-   state <- newState 1000
+   state <- newState 2000
    mstate <- newMVar state
    putStrLn "Done."
    run 8080 (app mstate)
@@ -243,15 +243,15 @@ parseNote nid bs = Note nid
                                     , testWay  = Text.decodeUtf8 w
                                     , testMetric = case LBS.split (fromIntegral (ord '/')) m of
                                           [tim,desc] -> Metric
-                                                         (case tim of
-                                                            "runtime"      -> Runtime
-                                                            "compile_time" -> CompileTime
-                                                            _              -> error ("Invalid metric time: " <> show tim))
-                                                         (case desc of
-                                                            "bytes allocated"          -> BytesAlloc
-                                                            "max_bytes_used"           -> MaxBytesUsed
-                                                            "peak_megabytes_allocated" -> PeakMegabytesAlloc
-                                                            _                          -> error ("Invalid metric desc: " <> show desc))
+                                             (case tim of
+                                                "runtime"      -> Runtime
+                                                "compile_time" -> CompileTime
+                                                _              -> error ("Invalid metric time: " <> show tim))
+                                             (case desc of
+                                                "bytes allocated"          -> BytesAlloc
+                                                "max_bytes_used"           -> MaxBytesUsed
+                                                "peak_megabytes_allocated" -> PeakMegabytesAlloc
+                                                _                          -> error ("Invalid metric desc: " <> show desc))
                                           _         -> error ("Invalid metric: " <> show m <> ", ID: " <> show nid)
                                     })
                                  ( case LBS.readInteger v of
@@ -326,7 +326,7 @@ renderCommitChart state runner = do
       \  }\n\
       \  else {\n\
       \     var data = tooltip.dataPoints[0];\n\
-      \     tt.innerHTML = \"Value:\" + data.yLabel + \"<br/><br/>\" + commitDescription(data.xLabel);\n\
+      \     tt.innerHTML = \"Value: \" + data.yLabel + \"<br/><br/>\" + commitDescription(data.xLabel);\n\
       \  }\n\
       \}"
 
