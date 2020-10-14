@@ -559,8 +559,7 @@ options = Options
      <> value 8080
      <> help "Use port PORT for the HTTP server")
   <*> option auto (
-        long "ncommits"
-     <> short 'n'
+        short 'n'
      <> metavar "NCOMMITS"
      <> value 1000
      <> help "Consider NCOMMITS latest commits")
