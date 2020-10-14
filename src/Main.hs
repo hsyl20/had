@@ -287,10 +287,9 @@ renderCommitChart state runner = do
    let notes  = stateNotes state
        ids    = fmap fst (stateLastCommits state)
        tids   = stateTestIds state
-       shortId = Text.take 7
 
    -- JS function to display commit description
-   let mkCase i = "     case '" <> shortId (fst i) <> -- ideally we should match on full IDs
+   let mkCase i = "     case '" <> fst i <>
                   "':\n        return '"<> escape (snd i) <> "';\n"
        escape t = tics (escs (brks (renderText (toHtml t))))
        brks t = mconcat (List.intersperse "<br/>" (Text.splitOn "\n" t))
@@ -312,7 +311,7 @@ renderCommitChart state runner = do
       \  }\n\
       \  else {\n\
       \     var data = tooltip.dataPoints[0];\n\
-      \     tt.innerHTML = commitDescription(data.xLabel);\n\
+      \     tt.innerHTML = \"Value:\" + data.yLabel + \"<br/><br/>\" + commitDescription(data.xLabel);\n\
       \  }\n\
       \}"
 
@@ -347,8 +346,6 @@ renderCommitChart state runner = do
                      = go a bs -- keep "a" as the baseline
 
                   (labels,values) = unzip $ head labelledValues : go (head labelledValues) (tail labelledValues)
-                  shortLabels = map shortId labels
-
                h3_ (toHtml (showTestId tid))
                div_ $ canvas_
                   [ id_ (Text.toStrict chart_id)
@@ -358,7 +355,7 @@ renderCommitChart state runner = do
                   "new Chart(document.getElementById('" <> chart_id <> "'), {\
                   \   type: 'line',\
                   \   data: {\
-                  \      labels: " <> Text.pack (show shortLabels) <> ",\
+                  \      labels: " <> Text.pack (show labels) <> ",\
                   \      datasets: [{\
                   \         label: '"<> valueName <> "',\
                   \         data: " <> Text.pack (show values) <> ",\
@@ -369,9 +366,13 @@ renderCommitChart state runner = do
                   \         }]\
                   \   },\
                   \   options: {\
+                  \      legend: { display: false},\
+                  \      animation: { duration: 0},\
                   \      maintainAspectRatio: false,\
                   \      scales: {\
-                  \         yAxes: [{ type: 'linear', ticks: {beginAtZero: true}}]\
+                  \         yAxes: [{ type: 'linear', ticks: {beginAtZero: true}}],\
+                  \         xAxes: [{ ticks: { callback: function(value,index,values) {\
+                  \           return value.substring(0,7);}}}]\
                   \      },\
                   \      tooltips: {\
                   \        mode: 'point',\
@@ -386,11 +387,11 @@ renderCommitChart state runner = do
            , style_ "margin:0px; height: 100vh; flex-basis:70vw; overflow-y: scroll; resize:horizontal"
            ] leftPane
       div_ [ id_ "rightPane"
-           , style_ "height: 100vh; flex-basis:30vw; overflow-y: auto; background-color:antiquewhite"
+           , style_ "height: 100vh; flex-basis:30vw; overflow-y: auto; background-color:antiquewhite; resize:horizontal"
            ] do
          div_ [ id_ "tooltip"
               , style_ "width: 100%"
-              ] "context"
+              ] ""
 
 
 renderNote :: Note -> Html ()
