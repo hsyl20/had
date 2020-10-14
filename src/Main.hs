@@ -392,7 +392,7 @@ renderCommitChart state runner = do
                      | valueA <- snd a
                      , valueB <- snd b
                      , abs ((valueA - valueB) / valueA) > change_ratio
-                     = a : go b bs
+                     = b : go b bs
                      | otherwise
                      = go a bs -- keep "a" as the baseline
 
