@@ -261,21 +261,28 @@ parseNote nid bs = Note nid
 
 renderCommitList :: State -> Html ()
 renderCommitList state = do
-   let notes = stateNotes state
-       ids   = stateLastCommits state
-   forM_ ids $ \(cid,summary) -> do
-      pre_ do
-         toHtml summary
-      div_ do
-         a_ [href_ $ "/show/" <> Text.toStrict cid] $ "Diff"
-         " - "
-         case Map.lookup cid notes of
-            Just (Note note_id _) -> do
-               a_ [href_ $ "/note/" <> Text.toStrict note_id] $ "Perf report"
-            Nothing -> "Perf report not available"
-         " - "
-         a_ [href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid] $ "Gitlab"
+   let ids   = stateLastCommits state
+   forM_ ids $ \c -> do
+      renderCommit state c
       hr_ []
+
+renderCommit :: State -> (ID,Text) -> Html ()
+renderCommit state (cid,summary) = do
+   let notes = stateNotes state
+   pre_ do
+      toHtml summary
+   div_ do
+      a_ [href_ $ "/show/" <> Text.toStrict cid] $ "Diff"
+      " - "
+      case Map.lookup cid notes of
+         Just (Note note_id _) -> do
+            a_ [href_ $ "/note/" <> Text.toStrict note_id] $ "Perf report"
+         Nothing -> "Perf report not available"
+      " - "
+      a_ [ href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid
+         , target_ "_blank"
+         ] $ "Gitlab"
+
 
 renderAllRunners :: State -> Html ()
 renderAllRunners state = do
@@ -290,7 +297,7 @@ renderCommitChart state runner = do
 
    -- JS function to display commit description
    let mkCase i = "     case '" <> fst i <>
-                  "':\n        return '"<> escape (snd i) <> "';\n"
+                  "':\n        return '"<> escape (renderCommit state i) <> "';\n"
        escape t = tics (escs (brks (renderText (toHtml t))))
        brks t = mconcat (List.intersperse "<br/>" (Text.splitOn "\n" t))
        escs t = mconcat (List.intersperse "&#92;" (Text.splitOn "\\" t))
@@ -416,6 +423,8 @@ renderNote note = do
                  \         }]\
                  \   },\
                  \   options: {\
+                 \      legend: { display: false},\
+                 \      animation: { duration: 0},\
                  \      maintainAspectRatio: false,\
                  \      scales: {\
                  \         xAxes: [{ type: 'logarithmic'}]\
