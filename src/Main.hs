@@ -341,10 +341,12 @@ renderCommitChart state runner = do
                      | valueA <- fromIntegral (snd a)
                      , valueB <- fromIntegral (snd b)
                      , abs ((valueA - valueB) / (valueA :: Rational)) > 0.005 -- > 0.5%
-                     = a : b : go b bs
+                     = a : go b bs
                      | otherwise
                      = go a bs -- keep "a" as the baseline
 
+                  --(labels,values) = unzip labelledValues
+                  -- filter interesting commits
                   (labels,values) = unzip $ head labelledValues : go (head labelledValues) (tail labelledValues)
                h3_ (toHtml (showTestId tid))
                div_ $ canvas_
