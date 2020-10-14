@@ -45,6 +45,7 @@ data State = State
    , stateLastCommits :: [(ID,Text)]      -- ^ Last commits and their summary
    , stateTestIds     :: [TestId]         -- ^ All the test IDs we've found
    , stateRunners     :: [Runner]         -- ^ All the runners we've found
+   , stateOpts        :: Options          -- ^ Input options
    }
 
 data Note = Note
@@ -120,11 +121,6 @@ data MetricTime
 
 type ID = Text
 
-commit_count:: Word
-commit_count = 1000
-   -- don't set this number too high because older note format isn't supported:
-   -- metrics for the compiler and for the test programs were mixed
-
 change_ratio :: Double
 change_ratio = 0.005 -- 0.5%
 
@@ -133,16 +129,17 @@ main = do
    opts <- getOptions
 
    putStrLn "Reading current state..."
-   state <- newState commit_count
+   state <- newState opts
    mstate <- newMVar state
 
    putStrLn $ "Starting server on: http://localhost:" ++ show (opt_port opts) ++ "/"
    run (opt_port opts) (app mstate)
 
-newState :: Word -> IO State
-newState ncommits = do
+newState :: Options -> IO State
+newState opts = do
    --putStrLn "Fetch origin..."
    --gitFetchOrigin
+   let ncommits = opt_ncommits opts
    putStrLn $ "Get latest " <> show ncommits <> " commits..."
    latest_ids <- gitLastCommits ncommits
    summaries <- forM latest_ids gitObjectSummary
@@ -185,6 +182,7 @@ newState ncommits = do
         , stateLastCommits = latests
         , stateTestIds     = test_ids
         , stateRunners     = runners
+        , stateOpts        = opts
         }
    putStrLn "Update done."
    return state
@@ -455,7 +453,7 @@ renderCommitChart state runner = do
          ul_ do
             li_ do
                "Only the latest "
-               toHtml (show commit_count)
+               toHtml (show (opt_ncommits (stateOpts state)))
                " commits are taken into account."
             li_ do
                "Only commits with absolute metric change > "
@@ -548,7 +546,8 @@ gitObjectSummary obj = do
 
 
 data Options = Options
-   { opt_port :: Int
+   { opt_port     :: !Int
+   , opt_ncommits :: !Word
    }
 
 options :: Parser Options
@@ -559,6 +558,15 @@ options = Options
      <> metavar "PORT"
      <> value 8080
      <> help "Use port PORT for the HTTP server")
+  <*> option auto (
+        long "ncommits"
+     <> short 'n'
+     <> metavar "NCOMMITS"
+     <> value 1000
+     <> help "Consider NCOMMITS latest commits")
+      -- don't set this number too high because older note format isn't
+      -- supported: metrics for the compiler and for the test programs were
+      -- mixed
   
 
 getOptions :: IO Options
