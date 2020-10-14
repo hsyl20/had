@@ -134,8 +134,16 @@ newState ncommits = do
                      $ Map.elems notes
 
    putStrLn "Gather all runners..."
-   let !runners = List.nub
+   let -- some quotes have been added by mistake then removed on some runners names
+       fix_runner t
+         | Just x <- Text.stripPrefix "\"" t
+         , Just y <- Text.stripSuffix "\"" x
+         = y
+         | otherwise
+         = t
+       !runners = List.nub
                      $ List.sort
+                     $ fmap fix_runner
                      $ concat
                      $ fmap (Map.keys . noteTests)
                      $ Map.elems notes
