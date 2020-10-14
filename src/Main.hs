@@ -373,32 +373,39 @@ renderCommitChart state runner = do
                                     $ fmap (\x -> (x, lookup_value x)) ids
                 valueName = showTestId tid
 
-            unless (null labelledValues) do
 
-               let
-                  -- filter successive values with less than change_ratio change
-                  go _ []     = []
-                  go _ [b]    = [b] -- keep the last value
-                  go a (b:bs)
-                     | isNaN (snd a) && isNaN (snd b)
-                     = go a bs -- only keep one missing value
-                  go a (b:bs)
-                     | isNaN (snd a)
-                     = b : go b bs
-                  go _ (b:bs)
-                     | isNaN (snd b)
-                     = b : go b bs
-                  go a (b:bs)
-                     | valueA <- snd a
-                     , valueB <- snd b
-                     , abs ((valueA - valueB) / valueA) > change_ratio
-                     = b : go b bs
-                     | otherwise
-                     = go a bs -- keep "a" as the baseline
+            let
+               -- filter successive values with less than change_ratio change
+               go _ _ []     = []
+               go _ _ [b]    = [b] -- keep the last value
+               go ref _lst (b:bs)
+                  | isNaN (snd ref) && isNaN (snd b)
+                  = go ref Nothing bs -- only keep one missing value
+               go ref _lst (b:bs)
+                  | isNaN (snd ref)
+                  = b : go b Nothing bs
+               go _ mlst (b:bs)
+                  | isNaN (snd b)
+                  = case mlst of
+                     Nothing  -> b : go b Nothing bs
+                     Just lst -> lst : b : go b Nothing bs
+               go ref _lst (b:bs)
+                  | valueA <- snd ref
+                  , valueB <- snd b
+                  , abs ((valueA - valueB) / valueA) > change_ratio
+                  = b : go b Nothing bs
+                  | otherwise
+                  = go ref (Just b) bs -- keep "ref" as the baseline to avoid drift
 
-                  --(labels,values) = unzip labelledValues
-                  -- filter interesting commits
-                  (labels,values) = unzip $ head labelledValues : go (head labelledValues) (tail labelledValues)
+               --(labels,values) = unzip labelledValues
+               -- filter interesting commits
+               (labels,values)
+                  | null labelledValues = ([],[])
+                  | otherwise =
+                     let h = head labelledValues
+                     in unzip $ h : go h Nothing (tail labelledValues)
+
+            unless (null values || all isNaN values) do
 
                let ttid = showTestId tid
                    stid = encodeTestId tid
@@ -458,9 +465,9 @@ renderCommitChart state runner = do
             li_ do
                "Only commits with absolute metric change > "
                toHtml (show (change_ratio * 100))
-               "% are displayed"
+               "% are displayed in continuous series"
             li_ do
-               "Some commits don't have recorded perf changes, so their metric changes (if any) are only visible in the next commit with recorded perf changes! You can see commits without perf reports "
+               "Discontinuities indicate missing values. You can see commits without perf reports "
                a_ [href_ "/commits"] "here"
          hr_ []
          div_ [ id_ "tooltip"
