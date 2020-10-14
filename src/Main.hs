@@ -71,8 +71,8 @@ showTestId tid = mconcat
 showMetric :: Metric -> Text
 showMetric (Metric t d) = mconcat
    [ case t of
-      CompileTime -> "compilation"
-      Runtime     -> "execution"
+      CompileTime -> "ghc"
+      Runtime     -> "test"
    , " / "
    , case d of
       BytesAlloc         -> "bytes allocated"
@@ -111,18 +111,18 @@ newState :: Word -> IO State
 newState ncommits = do
    --putStrLn "Fetch origin..."
    --gitFetchOrigin
-   putStrLn $ "Get last " <> show ncommits <> " commits..."
-   last_ids <- gitLastCommits ncommits
-   summaries <- forM last_ids gitObjectSummary
-   let lasts = last_ids `zip` summaries
+   putStrLn $ "Get latest " <> show ncommits <> " commits..."
+   latest_ids <- gitLastCommits ncommits
+   summaries <- forM latest_ids gitObjectSummary
+   let latests = latest_ids `zip` summaries
 
    putStrLn "Fetch perf notes..."
    gitUpdateNotes
    putStrLn "Read perf notes..."
    notes_map <- gitReadNotesMap
-   let !last_ids_set = Set.fromList last_ids
-   let !last_notes_map = Map.restrictKeys notes_map last_ids_set
-   notes <- forM last_notes_map $ \nid -> do
+   let !latest_ids_set = Set.fromList latest_ids
+   let !latest_notes_map = Map.restrictKeys notes_map latest_ids_set
+   notes <- forM latest_notes_map $ \nid -> do
       res <- gitShowObject nid
       return $ parseNote nid res
 
@@ -142,7 +142,7 @@ newState ncommits = do
 
    let state = State
         { stateNotes       = notes
-        , stateLastCommits = lasts
+        , stateLastCommits = latests
         , stateTestIds     = test_ids
         , stateRunners     = runners
         }
@@ -219,7 +219,7 @@ htmlWrap body = do
                , type_ "text/css"
                , href_ "style/chart.css"
                ]
-      body_ body
+      body_ [style_ "padding: 0px; margin: 0px"] body
 
 
 htmlResponse :: Html () -> Response
@@ -287,60 +287,111 @@ renderCommitChart state runner = do
    let notes  = stateNotes state
        ids    = fmap fst (stateLastCommits state)
        tids   = stateTestIds state
+       shortId = Text.take 7
 
-   h2_ (toHtml runner)
-   forM_ tids $ \tid -> do
-      let chart_id = "chart-" <> showTestId tid <> "-" <> runner
-          lookup_value cid = case Map.lookup cid notes of
-            Nothing   -> Nothing -- no perf report for the commit
-            Just note -> case Map.lookup runner (noteTests note) of
-               Nothing -> Nothing -- no result for this runner
-               Just ts -> case Map.lookup tid ts of
-                  Nothing -> Nothing -- no result for this test
-                  Just v  -> Just (cid,v)
-          labelledValues = reverse $ catMaybes (fmap lookup_value ids)
-          valueName = showTestId tid
+   -- JS function to display commit description
+   let mkCase i = "     case '" <> shortId (fst i) <> -- ideally we should match on full IDs
+                  "':\n        return '"<> escape (snd i) <> "';\n"
+       escape t = tics (escs (brks (renderText (toHtml t))))
+       brks t = mconcat (List.intersperse "<br/>" (Text.splitOn "\n" t))
+       escs t = mconcat (List.intersperse "&#92;" (Text.splitOn "\\" t))
+       tics t = mconcat (List.intersperse "&#39;" (Text.splitOn "'" t))
+       cases = mconcat $ fmap mkCase (stateLastCommits state)
 
-      unless (null labelledValues) do
+   script_ $ Text.toStrict $
+      "function commitDescription(id) {\n\
+      \  switch(id) {\n" <> cases <>
+      "     default:\n\
+      \        return 'Commit not found?!';\n\
+      \  }\n\
+      \}\n\
+      \function customToolTips(tooltip) {\n\
+      \  var tt = document.getElementById('tooltip');\n\
+      \  if (!tooltip || !tooltip.dataPoints) {\n\
+      \     //tt.innerHTML = '';\n\
+      \  }\n\
+      \  else {\n\
+      \     var data = tooltip.dataPoints[0];\n\
+      \     tt.innerHTML = commitDescription(data.xLabel);\n\
+      \  }\n\
+      \}"
 
-         let
-            -- filter successive values with less than 1% change
-            go _ []     = []
-            go _ [b]    = [b] -- keep the last value
-            go a (b:bs)
-               | valueA <- fromIntegral (snd a)
-               , valueB <- fromIntegral (snd b)
-               , abs ((valueA - valueB) / (valueA :: Rational)) > 0.5 -- > 0.5%
-               = b : go b bs
-               | otherwise
-               = go a bs -- keep "a" as the baseline
+   let
+       leftPane =  do
+         h2_ (toHtml runner)
 
-            (labels,values) = unzip $ head labelledValues : go (head labelledValues) (tail labelledValues)
+         forM_ tids $ \tid -> do
+            let chart_id = "chart-" <> showTestId tid <> "-" <> runner
+                lookup_value cid = case Map.lookup cid notes of
+                  Nothing   -> Nothing -- no perf report for the commit
+                  Just note -> case Map.lookup runner (noteTests note) of
+                     Nothing -> Nothing -- no result for this runner
+                     Just ts -> case Map.lookup tid ts of
+                        Nothing -> Nothing -- no result for this test
+                        Just v  -> Just (cid,v)
+                labelledValues = reverse $ catMaybes (fmap lookup_value ids)
+                valueName = showTestId tid
 
-         h3_ (toHtml (showTestId tid))
-         div_ $ canvas_
-            [ id_ (Text.toStrict chart_id)
-            --, style_ $ "width: " <> (Text.toStrict $ Text.pack $ show $ 5 + fromIntegral (length values) * (1.2 :: Float)) <> "em"
-            ] mempty
-         let chrt = "new Chart(document.getElementById('" <> chart_id <> "'), {\
-                    \   type: 'bar',\
-                    \   data: {\
-                    \      labels: " <> Text.pack (show labels) <> ",\
-                    \      datasets: [{\
-                    \         label: '"<> valueName <> "',\
-                    \         data: " <> Text.pack (show values) <> ",\
-                    \         cubicInterpolationMode: 'monotone',\
-                    \         backgroundColor: 'rgba(255,0,0,0.5)'\
-                    \         }]\
-                    \   },\
-                    \   options: {\
-                    \      maintainAspectRatio: false,\
-                    \      scales: {\
-                    \         yAxes: [{ type: 'linear', ticks: {beginAtZero: true}}]\
-                    \      }\
-                    \   }\
-                    \});"
-         script_ (Text.toStrict chrt)
+            unless (null labelledValues) do
+
+               let
+                  -- filter successive values with less than 1% change
+                  go _ []     = []
+                  go _ [b]    = [b] -- keep the last value
+                  go a (b:bs)
+                     | valueA <- fromIntegral (snd a)
+                     , valueB <- fromIntegral (snd b)
+                     , abs ((valueA - valueB) / (valueA :: Rational)) > 0.005 -- > 0.5%
+                     = a : b : go b bs
+                     | otherwise
+                     = go a bs -- keep "a" as the baseline
+
+                  (labels,values) = unzip $ head labelledValues : go (head labelledValues) (tail labelledValues)
+                  shortLabels = map shortId labels
+
+               h3_ (toHtml (showTestId tid))
+               div_ $ canvas_
+                  [ id_ (Text.toStrict chart_id)
+                  , style_ "width: 50em;"
+                  ] mempty
+               script_ $ Text.toStrict $
+                  "new Chart(document.getElementById('" <> chart_id <> "'), {\
+                  \   type: 'line',\
+                  \   data: {\
+                  \      labels: " <> Text.pack (show shortLabels) <> ",\
+                  \      datasets: [{\
+                  \         label: '"<> valueName <> "',\
+                  \         data: " <> Text.pack (show values) <> ",\
+                  \         steppedLine: 'before',\
+                  \         fill: false,\
+                  \         borderColor: 'rgba(255,0,0,0.5)',\
+                  \         backgroundColor: 'rgba(255,0,0,0.5)'\
+                  \         }]\
+                  \   },\
+                  \   options: {\
+                  \      maintainAspectRatio: false,\
+                  \      scales: {\
+                  \         yAxes: [{ type: 'linear', ticks: {beginAtZero: true}}]\
+                  \      },\
+                  \      tooltips: {\
+                  \        mode: 'point',\
+                  \        custom: customToolTips,\
+                  \        enabled: false\
+                  \      }\
+                  \   }\
+                  \});"
+
+   div_ [ style_ "display: inline-flex; width: 100vw"] do
+      div_ [ id_ "leftPane"
+           , style_ "margin:0px; height: 100vh; flex-basis:70vw; overflow-y: scroll; resize:horizontal"
+           ] leftPane
+      div_ [ id_ "rightPane"
+           , style_ "height: 100vh; flex-basis:30vw; overflow-y: auto; background-color:antiquewhite"
+           ] do
+         div_ [ id_ "tooltip"
+              , style_ "width: 100%"
+              ] "context"
+
 
 renderNote :: Note -> Html ()
 renderNote note = do
@@ -398,7 +449,7 @@ gitFetchOrigin = do
    (_exitCode,_res,_err) <- readProcess cmd
    return ()
 
--- | Return last N commit IDs from "origin/master"
+-- | Return latest N commit IDs from "origin/master"
 gitLastCommits :: Word -> IO [ID]
 gitLastCommits n = do
    let cmd = shell ("git log --pretty=%H origin/master -" <> show n)
