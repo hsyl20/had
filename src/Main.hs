@@ -28,6 +28,7 @@ import qualified Data.Text.Lazy as Text
 import Data.Text.Lazy (Text)
 import Lucid
 import Numeric.Natural
+import Data.Bifunctor
 import Data.FileEmbed
 import Data.Maybe
 import qualified Data.List as List
@@ -103,7 +104,7 @@ commit_count = 1000
    -- don't set this number too high because older note format isn't supported:
    -- metrics for the compiler and for the test programs were mixed
 
-change_ratio :: Rational
+change_ratio :: Double
 change_ratio = 0.005 -- 0.5%
 
 main :: IO ()
@@ -339,14 +340,18 @@ renderCommitChart state runner = do
 
          forM_ tids $ \tid -> do
             let chart_id = "chart-" <> showTestId tid <> "-" <> runner
+                nan = 0/0 :: Double
                 lookup_value cid = case Map.lookup cid notes of
                   Nothing   -> Nothing -- no perf report for the commit
                   Just note -> case Map.lookup runner (noteTests note) of
                      Nothing -> Nothing -- no result for this runner
                      Just ts -> case Map.lookup tid ts of
                         Nothing -> Nothing -- no result for this test
-                        Just v  -> Just (cid,v)
-                labelledValues = reverse $ catMaybes (fmap lookup_value ids)
+                        Just v  -> Just (fromIntegral v)
+                labelledValues = reverse
+                                    $ fmap (second (fromMaybe nan))
+                                    -- $ filter (not. isNothing . snd) -- filter missing values because there are too many...
+                                    $ fmap (\x -> (x, lookup_value x)) ids
                 valueName = showTestId tid
 
             unless (null labelledValues) do
@@ -356,9 +361,15 @@ renderCommitChart state runner = do
                   go _ []     = []
                   go _ [b]    = [b] -- keep the last value
                   go a (b:bs)
-                     | valueA <- fromIntegral (snd a)
-                     , valueB <- fromIntegral (snd b)
-                     , abs ((valueA - valueB) / (valueA :: Rational)) > change_ratio
+                     | isNaN (snd a) && isNaN (snd b)
+                     = go a bs -- only keep one missing value
+                  go a (b:bs)
+                     | isNaN (snd a) || isNaN (snd b)
+                     = a : go b bs
+                  go a (b:bs)
+                     | valueA <- snd a
+                     , valueB <- snd b
+                     , abs ((valueA - valueB) / valueA) > change_ratio
                      = a : go b bs
                      | otherwise
                      = go a bs -- keep "a" as the baseline
@@ -417,7 +428,7 @@ renderCommitChart state runner = do
                " commits are taken into account."
             li_ do
                "Only commits with absolute metric change > "
-               toHtml (show (fromRational (change_ratio * 100) :: Float))
+               toHtml (show (change_ratio * 100))
                "% are displayed"
             li_ do
                "Some commits don't have recorded perf changes, so their metric changes (if any) are only visible in the next commit with recorded perf changes! You can see commits without perf reports "
