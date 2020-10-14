@@ -25,6 +25,7 @@ dependencies:
 - bytestring
 - text
 - file-embed
+- optparse-applicative
 
 executables:
   had:

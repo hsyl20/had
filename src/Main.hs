@@ -31,6 +31,7 @@ import Numeric.Natural
 import Data.FileEmbed
 import Data.Maybe
 import qualified Data.List as List
+import Options.Applicative
 
 chartJs :: BS.ByteString
 chartJs = $(embedFile "static/Chart.bundle.min.js")
@@ -107,13 +108,14 @@ change_ratio = 0.005 -- 0.5%
 
 main :: IO ()
 main = do
-   putStrLn $ "http://localhost:8080/"
+   opts <- getOptions
 
    putStrLn "Reading current state..."
    state <- newState commit_count
    mstate <- newMVar state
-   putStrLn "Done."
-   run 8080 (app mstate)
+
+   putStrLn $ "Starting server on: http://localhost:" ++ show (opt_port opts) ++ "/"
+   run (opt_port opts) (app mstate)
 
 newState :: Word -> IO State
 newState ncommits = do
@@ -501,3 +503,26 @@ gitObjectSummary obj = do
    let cmd = shell ("git show --summary --decorate=no " <> show obj)
    (_exitCode,res,_err) <- readProcess cmd
    return $ Text.decodeUtf8 res
+
+
+data Options = Options
+   { opt_port :: Int
+   }
+
+options :: Parser Options
+options = Options
+  <$> option auto (
+        long "port"
+     <> short 'p'
+     <> metavar "PORT"
+     <> value 8080
+     <> help "Use port PORT for the HTTP server")
+  
+
+getOptions :: IO Options
+getOptions = execParser opts
+  where
+    opts = info (helper <*> options)
+      ( fullDesc
+     <> progDesc "GHC developer tool"
+     <> header "HAD" )

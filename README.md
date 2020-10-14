@@ -15,6 +15,6 @@ your PATH.
 
 To use it:
 > cd ghc_home_directory
-> had
+> had -p 6789
 
-Then navigate to "http://localhost:8080"
+Then navigate to "http://localhost:6789"
