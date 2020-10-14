@@ -173,6 +173,13 @@ app mstate request respond = case pathInfo request of
       let html = renderCommitList state
       respond $ htmlResponse html
 
+   ["commit",cid] -> do
+      state <- readMVar mstate
+      let cid' = Text.fromStrict cid
+      summary <- gitObjectSummary cid'
+      let html = renderCommit state (cid',summary)
+      respond $ htmlResponse html
+
    ["script","chart.js"] -> do
       respond $ responseLBS
          status200
@@ -303,30 +310,15 @@ renderCommitChart state runner = do
        ids    = fmap fst (stateLastCommits state)
        tids   = stateTestIds state
 
-   -- JS function to display commit description
-   let mkCase i = "     case '" <> fst i <>
-                  "':\n        return '"<> escape (renderCommit state i) <> "';\n"
-       escape t = tics (escs (brks (renderText (toHtml t))))
-       brks t = mconcat (List.intersperse "<br/>" (Text.splitOn "\n" t))
-       escs t = mconcat (List.intersperse "&#92;" (Text.splitOn "\\" t))
-       tics t = mconcat (List.intersperse "&#39;" (Text.splitOn "'" t))
-       cases = mconcat $ fmap mkCase (stateLastCommits state)
-
    script_ $ Text.toStrict $
-      "function commitDescription(id) {\n\
-      \  switch(id) {\n" <> cases <>
-      "     default:\n\
-      \        return 'Commit not found?!';\n\
-      \  }\n\
-      \}\n\
-      \function customToolTips(tooltip) {\n\
+      "function customToolTips(tooltip) {\n\
       \  var tt = document.getElementById('tooltip');\n\
       \  if (!tooltip || !tooltip.dataPoints) {\n\
       \     //tt.innerHTML = '';\n\
       \  }\n\
       \  else {\n\
       \     var data = tooltip.dataPoints[0];\n\
-      \     tt.innerHTML = \"Value: \" + data.yLabel + \"<br/><br/>\" + commitDescription(data.xLabel);\n\
+      \     fetch('/commit/'+data.label).then((res) => { return res.text(); }).then((html) => tt.innerHTML = \"Value: \" + data.value + \"<br/><br/>\" + html);\n\
       \  }\n\
       \}"
 
