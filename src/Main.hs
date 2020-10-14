@@ -82,6 +82,27 @@ showMetric (Metric t d) = mconcat
       MaxBytesUsed       -> "max bytes used"
    ]
 
+encodeTestId :: TestId -> Text
+encodeTestId tid = mconcat
+   [ testName tid
+   , "_"
+   , testWay tid
+   , "_"
+   , encodeMetric (testMetric tid)
+   ]
+
+encodeMetric :: Metric -> Text
+encodeMetric (Metric t d) = mconcat
+   [ case t of
+      CompileTime -> "ghc"
+      Runtime     -> "test"
+   , "_"
+   , case d of
+      BytesAlloc         -> "alloc"
+      PeakMegabytesAlloc -> "peak"
+      MaxBytesUsed       -> "max"
+   ]
+
 data Metric
    = Metric !MetricTime !MetricDesc
    deriving (Show,Eq,Ord,Read)
@@ -380,7 +401,14 @@ renderCommitChart state runner = do
                   --(labels,values) = unzip labelledValues
                   -- filter interesting commits
                   (labels,values) = unzip $ head labelledValues : go (head labelledValues) (tail labelledValues)
-               h3_ (toHtml (showTestId tid))
+
+               let ttid = showTestId tid
+                   stid = encodeTestId tid
+               a_ [ name_ (Text.toStrict stid)
+                  , href_ ("#"<> Text.toStrict stid)
+                  , style_ "color: gray; text-decoration: none"
+                  ] do
+                  h3_ (toHtml ttid)
                div_ $ canvas_
                   [ id_ (Text.toStrict chart_id)
                   , style_ "width: 50em;"
