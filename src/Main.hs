@@ -364,8 +364,11 @@ renderCommitChart state runner = do
                      | isNaN (snd a) && isNaN (snd b)
                      = go a bs -- only keep one missing value
                   go a (b:bs)
-                     | isNaN (snd a) || isNaN (snd b)
-                     = a : go b bs
+                     | isNaN (snd a)
+                     = b : go b bs
+                  go _ (b:bs)
+                     | isNaN (snd b)
+                     = b : go b bs
                   go a (b:bs)
                      | valueA <- snd a
                      , valueB <- snd b
