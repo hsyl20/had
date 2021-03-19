@@ -25,12 +25,16 @@ import Haskus.Had.State
 import Haskus.Had.Perf
 import Haskus.Had.CmdLine
 import Haskus.Had.Git
+import Haskus.Had.Misc
 
 chartJs :: BS.ByteString
 chartJs = $(embedFile "static/Chart.bundle.min.js")
 
 chartCss :: BS.ByteString
 chartCss = $(embedFile "static/Chart.css")
+
+styleCss :: BS.ByteString
+styleCss = $(embedFile "static/style.css")
 
 main :: IO ()
 main = do
@@ -99,11 +103,21 @@ app :: MVar State -> Application
 app mstate request respond = case pathInfo request of
    [] -> do
       state <- readMVar mstate
+      let menu = 
+              [ MenuEntry "#" "Runners"
+              , MenuEntry "#" "Commits"
+              ]
+          cards =
+              [ Card Full (renderAllRunners state)
+              , Card Default $ a_ [href_ "/commits"] "Recent commits"
+              ]
       let html = do
-            h1_ "Runners"
-            renderAllRunners state
-            h1_ "Misc"
-            a_ [href_ "/commits"] "Recent commits"
+            layout menu cards
+            --welcome
+            --widget "CI runners" do
+            --  renderAllRunners state
+            --widget "Commits" do
+            --  a_ [href_ "/commits"] "Recent commits"
       respond $ htmlResponse html
 
    ["commits"] -> do
@@ -129,6 +143,12 @@ app mstate request respond = case pathInfo request of
          status200
          [("Content-Type", "text/css")]
          (LBS.fromStrict chartCss)
+
+   ["style","style.css"] -> do
+      respond $ responseLBS
+         status200
+         [("Content-Type", "text/css")]
+         (LBS.fromStrict styleCss)
 
    ["show",obj] -> do
       res <- gitShowObject obj
@@ -165,6 +185,10 @@ htmlWrap body = do
          meta_ [ httpEquiv_ "Content-Type"
                , content_   "text/html;charset=utf-8"
                ]
+         link_ [ rel_  "stylesheet"
+               , type_ "text/css"
+               , href_ "/style/style.css"
+               ]
 
          -- chart.js
          script_ [src_ "/script/chart.js"] ("" :: String)
@@ -172,6 +196,7 @@ htmlWrap body = do
                , type_ "text/css"
                , href_ "/style/chart.css"
                ]
+
       body_ [style_ "padding: 0px; margin: 0px"] body
 
 
