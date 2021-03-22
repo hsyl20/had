@@ -29,6 +29,7 @@ dependencies:
 - gitlab-haskell
 - http-client
 - http-client-tls
+- async
 
 executables:
   had:

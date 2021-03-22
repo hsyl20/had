@@ -11,6 +11,7 @@ import Network.HTTP.Types
 import Network.Wai.Handler.Warp (run)
 
 import Control.Concurrent.MVar
+import Control.Concurrent.Async
 import Control.Monad
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -136,7 +137,7 @@ app mstate request respond = case pathInfo request of
         p <- getGhcProject state
         milestones <- (List.reverse . List.sortOn GitLab.milestone_title)
                       <$> getMilestones state p
-        issue_counts <- forM milestones \m -> getMilestoneOpenIssueCount state p m
+        issue_counts <- forConcurrently milestones \m -> getMilestoneOpenIssueCount state p m
         return
           [ Card Default $ do
             "Forks: "
