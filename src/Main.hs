@@ -16,10 +16,17 @@ import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.Map as Map
 import qualified Data.Set as Set
-import qualified Data.Text.Lazy as Text
+import qualified Data.Text.Lazy as LText
+import qualified Data.Text as Text
+import Data.Text (Text)
 import Lucid
 import Data.FileEmbed
 import qualified Data.List as List
+
+import qualified GitLab
+import GitLab (runGitLab, defaultGitLabServer)
+
+import System.Environment
 
 import Haskus.Had.State
 import Haskus.Had.Perf
@@ -38,17 +45,21 @@ styleCss = $(embedFile "static/style.css")
 
 main :: IO ()
 main = do
+   let tok_env = "HAD_GITLAB_TOKEN"
+   token <- Text.pack <$> getEnv tok_env
+   unsetEnv tok_env
+
    opts <- getOptions
 
    putStrLn "Reading current state..."
-   state <- newState opts
+   state <- newState token opts
    mstate <- newMVar state
 
    putStrLn $ "Starting server on: http://localhost:" ++ show (opt_port opts) ++ "/"
    run (opt_port opts) (app mstate)
 
-newState :: Options -> IO State
-newState opts = do
+newState :: Text -> Options -> IO State
+newState gitlab_token opts = do
    --putStrLn "Fetch origin..."
    --gitFetchOrigin
    let ncommits = opt_ncommits opts
@@ -77,8 +88,8 @@ newState opts = do
    putStrLn "Gather all runners..."
    let -- some quotes have been added by mistake then removed on some runners names
        fix_runner t
-         | Just x <- Text.stripPrefix "\"" t
-         , Just y <- Text.stripSuffix "\"" x
+         | Just x <- LText.stripPrefix "\"" t
+         , Just y <- LText.stripSuffix "\"" x
          = y
          | otherwise
          = t
@@ -90,7 +101,8 @@ newState opts = do
                      $ Map.elems notes
 
    let state = State
-        { stateNotes       = notes
+        { stateGitlabToken = gitlab_token
+        , stateNotes       = notes
         , stateLastCommits = latests
         , stateTestIds     = test_ids
         , stateRunners     = runners
@@ -103,14 +115,35 @@ app :: MVar State -> Application
 app mstate request respond = case pathInfo request of
    [] -> do
       state <- readMVar mstate
+      ghc_project <- runGitLab
+        (defaultGitLabServer
+            { GitLab.url = "https://gitlab.haskell.org"
+            , GitLab.token = stateGitlabToken state
+            } )
+        (GitLab.searchProjectId 1)
       let menu = 
               [ MenuEntry "#" "Runners"
               , MenuEntry "#" "Commits"
               ]
+          gitlab_cards = case ghc_project of
+            Left err ->
+              [ Card Default $ do
+                  "Can't connect to GitLab: "
+                  toHtml (show err)
+              ]
+            Right Nothing ->
+              [ Card Default $ "Can't find GHC project on GitLab"
+              ]
+            Right (Just p) ->
+              [ Card Default $ do
+                "Forks: "
+                toHtml (show (GitLab.forks_count p))
+              ]
+
           cards =
               [ Card Full (renderAllRunners state)
               , Card Default $ a_ [href_ "/commits"] "Recent commits"
-              ]
+              ] ++ gitlab_cards
       let html = do
             layout menu cards
             --welcome
@@ -127,7 +160,7 @@ app mstate request respond = case pathInfo request of
 
    ["commit",cid] -> do
       state <- readMVar mstate
-      let cid' = Text.fromStrict cid
+      let cid' = LText.fromStrict cid
       summary <- gitObjectSummary cid'
       let html = renderCommit state (cid',summary)
       respond $ htmlResponse html
@@ -159,13 +192,13 @@ app mstate request respond = case pathInfo request of
 
    ["note",obj] -> do
       res <- gitShowObject obj
-      let note = parseNote (Text.fromStrict obj) res
+      let note = parseNote (LText.fromStrict obj) res
           html = renderNote note
       respond $ htmlResponse html
 
    ["chart",runner] -> do
       state <- readMVar mstate
-      let html = renderCommitChart state (Text.fromStrict runner)
+      let html = renderCommitChart state (LText.fromStrict runner)
       respond $ htmlResponse html
 
    _ -> respond $ notFound

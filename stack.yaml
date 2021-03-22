@@ -2,3 +2,6 @@ resolver: lts-14.22
 
 packages:
 - .
+
+extra-deps:
+- gitlab-haskell-0.2.5@sha256:73e46c384c9a4781bb344f9f08a47143ae553182c675c9fe9d07aaf7d63296fe,4221

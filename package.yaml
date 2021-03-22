@@ -26,6 +26,7 @@ dependencies:
 - text
 - file-embed
 - optparse-applicative
+- gitlab-haskell
 
 executables:
   had:
