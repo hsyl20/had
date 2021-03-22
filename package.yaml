@@ -27,6 +27,8 @@ dependencies:
 - file-embed
 - optparse-applicative
 - gitlab-haskell
+- http-client
+- http-client-tls
 
 executables:
   had:

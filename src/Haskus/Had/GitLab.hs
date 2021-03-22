@@ -12,7 +12,7 @@ import GitLab.WebRequests.GitLabWebCalls
 import Haskus.Had.State
 
 gitlabRequest :: State -> GitLab m -> IO m
-gitlabRequest s act = runGitLab (stateGitlab s) act
+gitlabRequest s act = runGitLabWithManager (stateHttpMgr s) (stateGitlab s) act
 
 getGhcProject :: State -> IO Project
 getGhcProject s = do
@@ -34,7 +34,7 @@ getMilestoneIssueCount :: State -> Project -> Milestone -> IO (Maybe Stats)
 getMilestoneIssueCount s p m = gitlabRequest s (gitlabWithAttrsOneUnsafe path opts)
   where
     path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/issues_statistics"
-    opts = "&milestone=" <> milestone_title m
+    opts = "&scope=all&milestone=" <> milestone_title m
 
 -- | Get number of open issues associated with a milestone
 getMilestoneOpenIssueCount :: State -> Project -> Milestone -> IO Word

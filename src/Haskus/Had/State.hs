@@ -5,22 +5,24 @@ import Data.Map (Map)
 import qualified Data.Text.Lazy as LText
 import Numeric.Natural
 import GitLab (GitLabServerConfig)
+import qualified Network.HTTP.Client as HTTP
 
 import Haskus.Had.CmdLine
 
 data State = State
-   { stateGitlab      :: GitLabServerConfig -- ^ Gitlab token
-   , stateNotes       :: LMap.Map ID Note   -- ^ All the notes (Map commit note)
-   , stateLastCommits :: [(ID,LText.Text)]  -- ^ Last commits and their summary
-   , stateTestIds     :: [TestId]           -- ^ All the test IDs we've found
-   , stateRunners     :: [Runner]           -- ^ All the runners we've found
-   , stateOpts        :: Options            -- ^ Input options
-   }
+  { stateHttpMgr     :: HTTP.Manager       -- ^ HTTP manager (keep-alive connections)
+  , stateGitlab      :: GitLabServerConfig -- ^ Gitlab token
+  , stateNotes       :: LMap.Map ID Note   -- ^ All the notes (Map commit note)
+  , stateLastCommits :: [(ID,LText.Text)]  -- ^ Last commits and their summary
+  , stateTestIds     :: [TestId]           -- ^ All the test IDs we've found
+  , stateRunners     :: [Runner]           -- ^ All the runners we've found
+  , stateOpts        :: Options            -- ^ Input options
+  }
 
 data Note = Note
-   { noteId    :: ID
-   , noteTests :: Map Runner (Map TestId Natural)
-   }
+  { noteId    :: ID
+  , noteTests :: Map Runner (Map TestId Natural)
+  }
 
 type Runner = LText.Text
 

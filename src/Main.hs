@@ -25,6 +25,9 @@ import qualified Data.List as List
 
 import System.Environment
 
+import qualified Network.HTTP.Client as HTTP
+import qualified Network.HTTP.Client.TLS as HTTP
+
 import qualified GitLab
 
 import Haskus.Had.State
@@ -105,8 +108,11 @@ newState gitlab_token opts = do
         , GitLab.token = gitlab_token
         }
 
+   http_manager <- HTTP.newManager HTTP.tlsManagerSettings
+
    let state = State
-        { stateGitlab      = gitlab_server
+        { stateHttpMgr     = http_manager
+        , stateGitlab      = gitlab_server
         , stateNotes       = notes
         , stateLastCommits = latests
         , stateTestIds     = test_ids
