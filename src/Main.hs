@@ -25,6 +25,7 @@ import qualified Data.List as List
 
 import qualified GitLab
 import GitLab (runGitLab, defaultGitLabServer)
+import GitLab.WebRequests.GitLabWebCalls (gitlabWithAttrs)
 
 import System.Environment
 
@@ -115,32 +116,49 @@ app :: MVar State -> Application
 app mstate request respond = case pathInfo request of
    [] -> do
       state <- readMVar mstate
-      ghc_project <- runGitLab
-        (defaultGitLabServer
-            { GitLab.url = "https://gitlab.haskell.org"
-            , GitLab.token = stateGitlabToken state
-            } )
-        (GitLab.searchProjectId 1)
+      let gitlab_req :: GitLab.GitLab m -> IO m
+          gitlab_req act = runGitLab
+            (defaultGitLabServer
+                { GitLab.url = "https://gitlab.haskell.org"
+                , GitLab.token = stateGitlabToken state
+                } )
+            act
+
+      ghc_project <- gitlab_req (GitLab.searchProjectId 1)
+
       let menu = 
               [ MenuEntry "#" "Runners"
               , MenuEntry "#" "Commits"
               ]
-          gitlab_cards = case ghc_project of
-            Left err ->
+
+      gitlab_cards <- case ghc_project of
+            Left err -> return
               [ Card Default $ do
                   "Can't connect to GitLab: "
                   toHtml (show err)
               ]
-            Right Nothing ->
+            Right Nothing -> return
               [ Card Default $ "Can't find GHC project on GitLab"
               ]
-            Right (Just p) ->
-              [ Card Default $ do
-                "Forks: "
-                toHtml (show (GitLab.forks_count p))
-              ]
+            Right (Just p) -> do
+              let milestones_path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/milestones"
+              let milestones_opts = "&state=active"
+              Right milestones' <- gitlab_req (gitlabWithAttrs milestones_path milestones_opts)
+              let milestones = List.reverse (List.sortOn GitLab.milestone_title milestones')
+              return
+                [ Card Default $ do
+                  "Forks: "
+                  toHtml (show (GitLab.forks_count p))
+                , Card Full $ do
+                    h1_ "Milestones"
+                    ul_ $ forM_ milestones \m -> do
+                      li_ $
+                        a_ [href_ ("https://gitlab.haskell.org/ghc/ghc/-/milestones/"
+                                    <> Text.pack (show (GitLab.milestone_iid m)))] $
+                          toHtml (GitLab.milestone_title m)
+                ]
 
-          cards =
+      let cards =
               [ Card Full (renderAllRunners state)
               , Card Default $ a_ [href_ "/commits"] "Recent commits"
               ] ++ gitlab_cards

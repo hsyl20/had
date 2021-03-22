@@ -5,12 +5,16 @@
 
 packages:
 - completed:
-    hackage: gitlab-haskell-0.2.5@sha256:73e46c384c9a4781bb344f9f08a47143ae553182c675c9fe9d07aaf7d63296fe,4221
+    name: gitlab-haskell
+    version: 0.2.5
+    git: https://github.com/hsyl20/gitlab-haskell
     pantry-tree:
-      size: 3612
-      sha256: f5877a25d2ae6fc696a4e60928f8de8a1c74cb50d3b14ddd1f2d5d76e15e7cc2
+      size: 4069
+      sha256: d20034caba2a2979600251b5c99a7b5048818e72a61c648dbfa0da397d042838
+    commit: 1c6f923a4866e94f40fdb7fade25fe111ddedda4
   original:
-    hackage: gitlab-haskell-0.2.5@sha256:73e46c384c9a4781bb344f9f08a47143ae553182c675c9fe9d07aaf7d63296fe,4221
+    git: https://github.com/hsyl20/gitlab-haskell
+    commit: 1c6f923a4866e94f40fdb7fade25fe111ddedda4
 snapshots:
 - completed:
     size: 524164
