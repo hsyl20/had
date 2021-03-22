@@ -41,3 +41,9 @@ getMilestoneOpenIssueCount :: State -> Project -> Milestone -> IO Word
 getMilestoneOpenIssueCount s p m = do
   Just r <- getMilestoneIssueCount s p m
   return (statistics_counts_opened . statistics_counts . statistics $ r)
+
+getLabels :: State -> Project -> IO [Label]
+getLabels s p = gitlabRequest s (gitlabWithAttrsUnsafe path opts)
+  where
+    path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/labels"
+    opts = "&with_counts=true"
