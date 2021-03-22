@@ -23,17 +23,16 @@ import Lucid
 import Data.FileEmbed
 import qualified Data.List as List
 
-import qualified GitLab
-import GitLab (runGitLab, defaultGitLabServer)
-import GitLab.WebRequests.GitLabWebCalls (gitlabWithAttrs)
-
 import System.Environment
+
+import qualified GitLab
 
 import Haskus.Had.State
 import Haskus.Had.Perf
 import Haskus.Had.CmdLine
 import Haskus.Had.Git
 import Haskus.Had.Misc
+import Haskus.Had.GitLab
 
 chartJs :: BS.ByteString
 chartJs = $(embedFile "static/Chart.bundle.min.js")
@@ -101,8 +100,13 @@ newState gitlab_token opts = do
                      $ fmap (Map.keys . noteTests)
                      $ Map.elems notes
 
+   let gitlab_server = GitLab.defaultGitLabServer
+        { GitLab.url   = "https://gitlab.haskell.org"
+        , GitLab.token = gitlab_token
+        }
+
    let state = State
-        { stateGitlabToken = gitlab_token
+        { stateGitlab      = gitlab_server
         , stateNotes       = notes
         , stateLastCommits = latests
         , stateTestIds     = test_ids
@@ -116,47 +120,34 @@ app :: MVar State -> Application
 app mstate request respond = case pathInfo request of
    [] -> do
       state <- readMVar mstate
-      let gitlab_req :: GitLab.GitLab m -> IO m
-          gitlab_req act = runGitLab
-            (defaultGitLabServer
-                { GitLab.url = "https://gitlab.haskell.org"
-                , GitLab.token = stateGitlabToken state
-                } )
-            act
-
-      ghc_project <- gitlab_req (GitLab.searchProjectId 1)
 
       let menu = 
               [ MenuEntry "#" "Runners"
               , MenuEntry "#" "Commits"
               ]
 
-      gitlab_cards <- case ghc_project of
-            Left err -> return
-              [ Card Default $ do
-                  "Can't connect to GitLab: "
-                  toHtml (show err)
-              ]
-            Right Nothing -> return
-              [ Card Default $ "Can't find GHC project on GitLab"
-              ]
-            Right (Just p) -> do
-              let milestones_path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/milestones"
-              let milestones_opts = "&state=active"
-              Right milestones' <- gitlab_req (gitlabWithAttrs milestones_path milestones_opts)
-              let milestones = List.reverse (List.sortOn GitLab.milestone_title milestones')
-              return
-                [ Card Default $ do
-                  "Forks: "
-                  toHtml (show (GitLab.forks_count p))
-                , Card Full $ do
-                    h1_ "Milestones"
-                    ul_ $ forM_ milestones \m -> do
-                      li_ $
-                        a_ [href_ ("https://gitlab.haskell.org/ghc/ghc/-/milestones/"
-                                    <> Text.pack (show (GitLab.milestone_iid m)))] $
-                          toHtml (GitLab.milestone_title m)
-                ]
+      gitlab_cards <- do
+        p <- getGhcProject state
+        milestones <- (List.reverse . List.sortOn GitLab.milestone_title)
+                      <$> getMilestones state p
+        issue_counts <- forM milestones \m -> getMilestoneOpenIssueCount state p m
+        return
+          [ Card Default $ do
+            "Forks: "
+            toHtml (show (GitLab.forks_count p))
+          , Card Full $ do
+              h1_ "Milestones"
+              ul_ $ forM_ (milestones `zip` issue_counts) \(m,ic) -> do
+                li_ $ do
+                  a_ [ href_ ("https://gitlab.haskell.org/ghc/ghc/-/milestones/"
+                              <> Text.pack (show (GitLab.milestone_iid m)))
+                     , target_ "_blank"
+                     ] $
+                    toHtml (GitLab.milestone_title m)
+                  ": "
+                  toHtml (show ic)
+                  " issues"
+          ]
 
       let cards =
               [ Card Full (renderAllRunners state)

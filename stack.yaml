@@ -5,4 +5,4 @@ packages:
 
 extra-deps:
   - git: https://github.com/hsyl20/gitlab-haskell
-    commit: 1c6f923a4866e94f40fdb7fade25fe111ddedda4
+    commit: 5dad7639396f4a9cd182af628ea5c373825c6e0d

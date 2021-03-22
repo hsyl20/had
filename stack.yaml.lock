@@ -10,11 +10,11 @@ packages:
     git: https://github.com/hsyl20/gitlab-haskell
     pantry-tree:
       size: 4069
-      sha256: d20034caba2a2979600251b5c99a7b5048818e72a61c648dbfa0da397d042838
-    commit: 1c6f923a4866e94f40fdb7fade25fe111ddedda4
+      sha256: 4540384c8084c433e9040dacccc8d2904293734f74f82b480203392f665094d3
+    commit: 5dad7639396f4a9cd182af628ea5c373825c6e0d
   original:
     git: https://github.com/hsyl20/gitlab-haskell
-    commit: 1c6f923a4866e94f40fdb7fade25fe111ddedda4
+    commit: 5dad7639396f4a9cd182af628ea5c373825c6e0d
 snapshots:
 - completed:
     size: 524164

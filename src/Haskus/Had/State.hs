@@ -2,19 +2,19 @@ module Haskus.Had.State where
 
 import qualified Data.Map.Lazy as LMap
 import Data.Map (Map)
-import Data.Text (Text)
 import qualified Data.Text.Lazy as LText
 import Numeric.Natural
+import GitLab (GitLabServerConfig)
 
 import Haskus.Had.CmdLine
 
 data State = State
-   { stateGitlabToken :: Text              -- ^ Gitlab token
-   , stateNotes       :: LMap.Map ID Note  -- ^ All the notes (Map commit note)
-   , stateLastCommits :: [(ID,LText.Text)] -- ^ Last commits and their summary
-   , stateTestIds     :: [TestId]          -- ^ All the test IDs we've found
-   , stateRunners     :: [Runner]          -- ^ All the runners we've found
-   , stateOpts        :: Options           -- ^ Input options
+   { stateGitlab      :: GitLabServerConfig -- ^ Gitlab token
+   , stateNotes       :: LMap.Map ID Note   -- ^ All the notes (Map commit note)
+   , stateLastCommits :: [(ID,LText.Text)]  -- ^ Last commits and their summary
+   , stateTestIds     :: [TestId]           -- ^ All the test IDs we've found
+   , stateRunners     :: [Runner]           -- ^ All the runners we've found
+   , stateOpts        :: Options            -- ^ Input options
    }
 
 data Note = Note
