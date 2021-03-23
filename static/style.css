@@ -165,3 +165,7 @@ img {
 .ticker__item {
   margin-right: 1rem;
 }
+
+li {
+  list-style-type: circle;
+}
