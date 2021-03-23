@@ -123,38 +123,57 @@ newState gitlab_token opts = do
    putStrLn "Update done."
    return state
 
+menu :: [MenuEntry]
+menu =
+    [ MenuEntry "/performance" "Performance"
+    , MenuEntry "/releases" "Releases"
+    , MenuEntry "/repository" "Repository"
+    , MenuEntry "/labels" "Labels"
+    ]
+
+
 app :: MVar State -> Application
-app mstate request respond = case pathInfo request of
+app mstate request respond = do
+
+  case pathInfo request of
    [] -> do
-      state <- readMVar mstate
-
-      let menu = 
-              [ MenuEntry "#" "Runners"
-              , MenuEntry "#" "Commits"
-              ]
-
-      gitlab_cards <- do
-        p <- getGhcProject state
-        card_milestones <- cardMilestones state p
-        card_labels <- cardLabels state p
-        return
-          [ cardForks p
-          , card_milestones
-          , card_labels
-          ]
-
       let cards =
-              [ Card Full (renderAllRunners state)
-              , Card Default $ a_ [href_ "/commits"] "Recent commits"
-              ] ++ gitlab_cards
-      let html = do
-            layout menu cards
-            --welcome
-            --widget "CI runners" do
-            --  renderAllRunners state
-            --widget "Commits" do
-            --  a_ [href_ "/commits"] "Recent commits"
-      respond $ htmlResponse html
+            [ Card Full do
+              "Welcome to GHC dashboard"
+            ]
+      respond $ htmlResponse $ layout menu cards
+
+   ["labels"] -> do
+      state <- readMVar mstate
+      p <- getGhcProject state
+      card_labels <- cardLabels state p
+      let cards = [ card_labels
+                  ]
+      respond $ htmlResponse $ layout menu cards
+
+   ["releases"] -> do
+      state <- readMVar mstate
+      p <- getGhcProject state
+      card_milestones <- cardMilestones state p
+      let cards = [ card_milestones
+                  ]
+      respond $ htmlResponse $ layout menu cards
+
+   ["performance"] -> do
+      state <- readMVar mstate
+      let cards = [ Card Default do
+                      h2_ "Metrics per runner"
+                      renderAllRunners state
+                  ]
+      respond $ htmlResponse $ layout menu cards
+
+   ["repository"] -> do
+      state <- readMVar mstate
+      p <- getGhcProject state
+      let cards = [ Card Default $ a_ [href_ "/commits"] "Recent commits"
+                  , cardForks p
+                  ]
+      respond $ htmlResponse $ layout menu cards
 
    ["commits"] -> do
       state <- readMVar mstate

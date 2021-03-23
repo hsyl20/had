@@ -29,10 +29,11 @@ layout menu cards = do
     header_ [class_ "admin__header"] do
 
       div_ [class_ "logo"] do
-        h1_ do
-          "GHC devs"
-          br_ []
-          "dashboard"
+        a_ [href_ "/"] do
+          h1_ do
+            "GHC devs"
+            br_ []
+            "dashboard"
 
       div_ [class_ "toolbar"] do
         button_ [class_ "btn btn--primary"] "Why?"
@@ -44,7 +45,6 @@ layout menu cards = do
           menuItem (menuUrl e) (menuBody e)
 
     main_ [class_ "admin__main"] do
-      h2_ "Dashboard"
       div_ [class_ "dashboard"] do
         forM_ cards \e -> do
           let c = case cardSize e of
