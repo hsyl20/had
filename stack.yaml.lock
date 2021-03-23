@@ -10,14 +10,14 @@ packages:
     git: https://github.com/hsyl20/gitlab-haskell
     pantry-tree:
       size: 4069
-      sha256: 7de83b66c6e4df12c2f7dff984840769a3199dfa7f3ed73ce50cb2ede607998d
-    commit: d525c5cbc5240fef7d5fb16196d854813734eadd
+      sha256: cfb1eb20833f550a6c73cdc4b8f63ba5df553bc0581d296b4ea359a8a5f540ef
+    commit: 50c1b47ef35bb59b2dada431368ee507ccd4eba6
   original:
     git: https://github.com/hsyl20/gitlab-haskell
-    commit: d525c5cbc5240fef7d5fb16196d854813734eadd
+    commit: 50c1b47ef35bb59b2dada431368ee507ccd4eba6
 snapshots:
 - completed:
-    size: 524164
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/14/22.yaml
-    sha256: 7ad8f33179b32d204165a3a662c6269464a47a7e65a30abc38d01b5a38ec42c0
-  original: lts-14.22
+    size: 565715
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/7.yaml
+    sha256: 1b5e4124989399e60e7a7901f0cefd910beea546131fb07a13a7208c4cc8b7ee
+  original: lts-17.7
