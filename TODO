@@ -1,1 +1,7 @@
-Gitlab interaction: https://www.macs.hw.ac.uk/~rs46/posts/2020-02-01-gitlab-haskell.html
+- HQ Sheperd label on front page
+- Sort labels: platforms, features, component, libraries
+- Releases: detect versions in milestones
+  - detect "backport needed:vv" labels
+- CI: detect master build status
+  - latest build status for each arch? (latest successful build/current state per arch)
+- detect issues without labels
