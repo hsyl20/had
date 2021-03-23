@@ -11,7 +11,6 @@ import Network.HTTP.Types
 import Network.Wai.Handler.Warp (run)
 
 import Control.Concurrent.MVar
-import Control.Concurrent.Async
 import Control.Monad
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -37,6 +36,7 @@ import Haskus.Had.CmdLine
 import Haskus.Had.Git
 import Haskus.Had.Misc
 import Haskus.Had.GitLab
+import Haskus.Had.Cards
 
 chartJs :: BS.ByteString
 chartJs = $(embedFile "static/Chart.bundle.min.js")
@@ -135,47 +135,12 @@ app mstate request respond = case pathInfo request of
 
       gitlab_cards <- do
         p <- getGhcProject state
-        milestones <- (List.reverse . List.sortOn GitLab.milestone_title)
-                      <$> getMilestones state p
-        issue_counts <- forConcurrently milestones \m -> getMilestoneOpenIssueCount state p m
-        labels <- getLabels state p
+        card_milestones <- cardMilestones state p
+        card_labels <- cardLabels state p
         return
-          [ Card Default $ do
-            "Forks: "
-            toHtml (show (GitLab.forks_count p))
-          , Card Full $ do
-              h2_ "Milestones"
-              ul_ $ forM_ (milestones `zip` issue_counts) \(m,ic) -> do
-                li_ $ do
-                  a_ [ href_ ("https://gitlab.haskell.org/ghc/ghc/-/milestones/"
-                              <> Text.pack (show (GitLab.milestone_iid m)))
-                     , target_ "_blank"
-                     ] $
-                    toHtml (GitLab.milestone_title m)
-                  ": "
-                  toHtml (show ic)
-                  " issues"
-          , Card Full $ do
-              h2_ "Labels"
-              let is_used_label l = GitLab.label_open_issues_count l > 0
-                                    || GitLab.label_open_merge_requests_count l > 0
-                  used_labels = filter is_used_label labels
-              ul_ $ forM_ used_labels \l -> do
-                li_ $ do
-                  toHtml (GitLab.label_name l)
-                  ": "
-                  a_ [href_ ("https://gitlab.haskell.org/ghc/ghc/-/issues?label_name%5B%5D="
-                            <> GitLab.label_name l)
-                     ] do
-                      toHtml (show (GitLab.label_open_issues_count l))
-                      " issues"
-                  ", "
-                  a_ [href_ ("https://gitlab.haskell.org/ghc/ghc/-/merge_requests?label_name%5B%5D="
-                            <> GitLab.label_name l)
-                     ] do
-                      toHtml (show (GitLab.label_open_merge_requests_count l))
-                      " MRs"
-
+          [ cardForks p
+          , card_milestones
+          , card_labels
           ]
 
       let cards =
