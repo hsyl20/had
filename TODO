@@ -1,3 +1,5 @@
 - Sort labels: platforms, features, component, libraries
 - CI: detect master build status
   - latest build status for each arch? (latest successful build/current state per arch)
+  - use https://docs.gitlab.com/ee/api/pipelines.html#get-variables-of-a-pipeline
+    to detect NIGHTLY pipelines
