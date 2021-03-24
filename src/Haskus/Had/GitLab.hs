@@ -36,6 +36,13 @@ getMilestoneIssueCount s p m = gitlabRequest s (gitlabWithAttrsOneUnsafe path op
     path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/issues_statistics"
     opts = "&scope=all&milestone=" <> milestone_title m
 
+-- | Get number of issues without any label
+getNoLabelIssueCount :: State -> Project -> IO (Maybe Stats)
+getNoLabelIssueCount s p = gitlabRequest s (gitlabWithAttrsOneUnsafe path opts)
+  where
+    path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/issues_statistics"
+    opts = "&scope=all&labels=None"
+
 -- | Get number of open issues associated with a milestone
 getMilestoneOpenIssueCount :: State -> Project -> Milestone -> IO Word
 getMilestoneOpenIssueCount s p m = do

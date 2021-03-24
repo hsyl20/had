@@ -4,4 +4,3 @@
   - detect "backport needed:vv" labels
 - CI: detect master build status
   - latest build status for each arch? (latest successful build/current state per arch)
-- detect issues without labels

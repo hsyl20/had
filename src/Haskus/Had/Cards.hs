@@ -42,6 +42,17 @@ cardMilestones s p = do
         toHtml (show ic)
         " issues"
 
+-- | Show the number of issues without labels
+cardIssuesWithoutLabels :: State -> GitLab.Project -> IO Card
+cardIssuesWithoutLabels s p = do
+  Just n <- getNoLabelIssueCount s p
+  return $ Card Default do
+    "Issues without any label: "
+    a_ [ target_ "_blank"
+       , href_ "https://gitlab.haskell.org/ghc/ghc/-/issues?scope=all&state=opened&label_name[]=None"] do
+      toHtml (show (GitLab.statistics_counts_opened (GitLab.statistics_counts (GitLab.statistics n))))
+
+
 -- | Show labels with the number of issues/MRs
 --
 -- Filter labels without issues/MRs

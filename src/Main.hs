@@ -147,7 +147,9 @@ app mstate request respond = do
       state <- readMVar mstate
       p <- getGhcProject state
       card_labels <- cardLabels state p
-      let cards = [ card_labels
+      card_nolabel <- cardIssuesWithoutLabels state p
+      let cards = [ card_nolabel
+                  , card_labels
                   ]
       respond $ htmlResponse $ layout menu cards
 
