@@ -31,7 +31,7 @@ cardMilestones s p = do
   milestones <- (List.reverse . List.sortOn GitLab.milestone_title)
                 <$> getMilestones s p
   issue_counts <- forConcurrently milestones \m -> getMilestoneOpenIssueCount s p m
-  return $ Card Col do
+  return $ Card Default do
     h2_ "Milestones"
     ul_ $ forM_ (milestones `zip` issue_counts) \(m,ic) -> do
       li_ $ do
@@ -45,7 +45,7 @@ cardMilestones s p = do
            , href_ ("https://gitlab.haskell.org/ghc/ghc/-/issues?scope=all&state=opened&milestone_title=" <> GitLab.milestone_title m)
            ] do
           toHtml (show ic)
-          " issues"
+          "#"
 
 -- | Show the number of issues without labels
 cardIssuesWithoutLabels :: State -> GitLab.Project -> IO Card
@@ -66,7 +66,7 @@ cardLabels s p = do
   labels <- getLabels s p
   return $ Card Full do
     h2_ "Labels"
-    div_ [style_ "column-width: 15em"] do
+    div_ [style_ "column-width: 20em"] do
       labelList labels
 
 labelIsUsed :: GitLab.Label -> Bool
@@ -107,7 +107,7 @@ labelList labels = do
 cardBackports :: State -> GitLab.Project -> IO Card
 cardBackports s p = do
   labels <- getBackportLabels s p
-  return $ Card Col do
+  return $ Card Default do
     h2_ "Backports"
     labelList labels
 
@@ -116,7 +116,7 @@ cardHQShepherd :: State -> GitLab.Project -> IO (Maybe Card)
 cardHQShepherd s p = do
   label <- getHQShepherd s p
   if labelIsUsed label
-    then return $ Just $ Card Col do
+    then return $ Just $ Card Default do
       labelShow label
     else return Nothing
 
@@ -126,7 +126,7 @@ cardMasterPipelines s p = do
   pipes <- forM (take 10 $ stateLastCommits s) \(sha,_) -> do
     pis <- getCommitPipelines s p sha
     return (sha,pis)
-  return $ Card Col do
+  return $ Card Default do
     h2_ "Pipelines on master"
     ul_ $ forM_ pipes \(sha,pis) -> do
       li_ $ do

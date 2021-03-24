@@ -170,3 +170,8 @@ img {
 li {
   list-style-type: circle;
 }
+
+h2 {
+  color: #68b0db;
+  margin: 0px;
+}
