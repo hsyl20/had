@@ -21,6 +21,7 @@ import qualified Data.Text as Text
 import Data.Text (Text)
 import Lucid
 import Data.FileEmbed
+import Data.Maybe
 import qualified Data.List as List
 
 import System.Environment
@@ -137,10 +138,12 @@ app mstate request respond = do
 
   case pathInfo request of
    [] -> do
+      state <- readMVar mstate
+      p <- getGhcProject state
+      mcard_hqsheperd <- cardHQShepherd state p
       let cards =
-            [ Card Full do
-              "Welcome to GHC dashboard"
-            ]
+            [
+            ] ++ maybeToList mcard_hqsheperd
       respond $ htmlResponse $ layout menu cards
 
    ["labels"] -> do
@@ -157,7 +160,9 @@ app mstate request respond = do
       state <- readMVar mstate
       p <- getGhcProject state
       card_milestones <- cardMilestones state p
+      card_backports <- cardBackports state p
       let cards = [ card_milestones
+                  , card_backports
                   ]
       respond $ htmlResponse $ layout menu cards
 

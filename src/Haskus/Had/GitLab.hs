@@ -54,3 +54,15 @@ getLabels s p = gitlabRequest s (gitlabWithAttrsUnsafe path opts)
   where
     path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/labels"
     opts = "&with_counts=true"
+
+getBackportLabels :: State -> Project -> IO [Label]
+getBackportLabels s p = gitlabRequest s (gitlabWithAttrsUnsafe path opts)
+  where
+    path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/labels"
+    opts = "&with_counts=true&search=backport"
+
+getHQShepherd :: State -> Project -> IO Label
+getHQShepherd s p = head <$> gitlabRequest s (gitlabWithAttrsUnsafe path opts)
+  where
+    path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/labels"
+    opts = "&with_counts=true&search=HQ shepherd"

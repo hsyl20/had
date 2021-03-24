@@ -36,7 +36,8 @@ layout menu cards = do
             "dashboard"
 
       div_ [class_ "toolbar"] do
-        button_ [class_ "btn btn--primary"] "Why?"
+        ""
+        -- button_ [class_ "btn btn--primary"] "Why?"
         -- div_ [class_ "logout"] "Log out" 
 
     nav_ [class_ "admin__nav"] do
@@ -55,7 +56,7 @@ layout menu cards = do
           c (cardBody e)
           
     footer_ [class_ "admin__footer"] do
-      text "Hi GHC devs!"
+      text "GHC devs dashboard - Contact: sylvain@haskus.fr"
 
 data MenuEntry = MenuEntry
   { menuUrl  :: Text

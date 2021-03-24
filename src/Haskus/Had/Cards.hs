@@ -29,7 +29,7 @@ cardMilestones s p = do
   milestones <- (List.reverse . List.sortOn GitLab.milestone_title)
                 <$> getMilestones s p
   issue_counts <- forConcurrently milestones \m -> getMilestoneOpenIssueCount s p m
-  return $ Card Default do
+  return $ Card Col do
     h2_ "Milestones"
     ul_ $ forM_ (milestones `zip` issue_counts) \(m,ic) -> do
       li_ $ do
@@ -65,30 +65,55 @@ cardLabels s p = do
   return $ Card Full do
     h2_ "Labels"
     div_ [style_ "column-width: 15em"] do
-      let is_used_label l = GitLab.label_open_issues_count l > 0
-                            || GitLab.label_open_merge_requests_count l > 0
-          used_labels = filter is_used_label labels
-      ul_ $ forM_ used_labels \l -> do
-        li_ $ do
-          toHtml (GitLab.label_name l)
-          " "
-          let issue_count = GitLab.label_open_issues_count l
-          let mr_count = GitLab.label_open_merge_requests_count l
-          when (issue_count > 0) do
-            a_ [ href_ ("https://gitlab.haskell.org/ghc/ghc/-/issues?label_name%5B%5D="
-                      <> GitLab.label_name l)
-               , title_ $ Text.pack (show issue_count) <>
-                          (if issue_count > 1 then " issues" else " issue")
-               ] do
-                toHtml (show issue_count)
-                "#"
-            " "
-          when (mr_count > 0) do
-            a_ [ href_ ("https://gitlab.haskell.org/ghc/ghc/-/merge_requests?label_name%5B%5D="
-                      <> GitLab.label_name l)
-               , title_ $ Text.pack (show mr_count) <>
-                          (if mr_count > 1 then " MRs" else " MR")
-               ] do
-                toHtml (show mr_count)
-                "!"
+      labelList labels
 
+labelIsUsed :: GitLab.Label -> Bool
+labelIsUsed l = GitLab.label_open_issues_count l > 0
+                || GitLab.label_open_merge_requests_count l > 0
+
+labelShow :: GitLab.Label -> Html ()
+labelShow l = do
+  let issue_count = GitLab.label_open_issues_count l
+  let mr_count = GitLab.label_open_merge_requests_count l
+  toHtml (GitLab.label_name l)
+  " "
+  when (issue_count > 0) do
+    a_ [ href_ ("https://gitlab.haskell.org/ghc/ghc/-/issues?label_name%5B%5D="
+              <> GitLab.label_name l)
+       , title_ $ Text.pack (show issue_count) <>
+                  (if issue_count > 1 then " issues" else " issue")
+       ] do
+        toHtml (show issue_count)
+        "#"
+    " "
+  when (mr_count > 0) do
+    a_ [ href_ ("https://gitlab.haskell.org/ghc/ghc/-/merge_requests?label_name%5B%5D="
+              <> GitLab.label_name l)
+       , title_ $ Text.pack (show mr_count) <>
+                  (if mr_count > 1 then " MRs" else " MR")
+       ] do
+        toHtml (show mr_count)
+        "!"
+
+labelList :: [GitLab.Label] -> Html ()
+labelList labels = do
+  let used_labels = filter labelIsUsed labels
+  ul_ $ forM_ used_labels \l -> do
+    li_ $ labelShow l
+
+-- | Show backport labels with the number of issues/MRs
+cardBackports :: State -> GitLab.Project -> IO Card
+cardBackports s p = do
+  labels <- getBackportLabels s p
+  return $ Card Col do
+    h2_ "Backports"
+    labelList labels
+
+-- | Show HQ Shepherd labels
+cardHQShepherd :: State -> GitLab.Project -> IO (Maybe Card)
+cardHQShepherd s p = do
+  label <- getHQShepherd s p
+  if labelIsUsed label
+    then return $ Just $ Card Col do
+      labelShow label
+    else return Nothing

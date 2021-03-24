@@ -1,6 +1,3 @@
-- HQ Sheperd label on front page
 - Sort labels: platforms, features, component, libraries
-- Releases: detect versions in milestones
-  - detect "backport needed:vv" labels
 - CI: detect master build status
   - latest build status for each arch? (latest successful build/current state per arch)
