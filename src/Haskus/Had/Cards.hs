@@ -38,9 +38,12 @@ cardMilestones s p = do
            , target_ "_blank"
            ] $
           toHtml (GitLab.milestone_title m)
-        ": "
-        toHtml (show ic)
-        " issues"
+        " - "
+        a_ [ target_ "_blank"
+           , href_ ("https://gitlab.haskell.org/ghc/ghc/-/issues?scope=all&state=opened&milestone_title=" <> GitLab.milestone_title m)
+           ] do
+          toHtml (show ic)
+          " issues"
 
 -- | Show the number of issues without labels
 cardIssuesWithoutLabels :: State -> GitLab.Project -> IO Card
