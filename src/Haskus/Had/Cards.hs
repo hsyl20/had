@@ -50,12 +50,20 @@ cardMilestones s p = do
 -- | Show the number of issues without labels
 cardIssuesWithoutLabels :: State -> GitLab.Project -> IO Card
 cardIssuesWithoutLabels s p = do
-  Just n <- getNoLabelIssueCount s p
-  return $ Card Default do
-    "Issues without any label: "
-    a_ [ target_ "_blank"
-       , href_ "https://gitlab.haskell.org/ghc/ghc/-/issues?scope=all&state=opened&label_name[]=None"] do
-      toHtml (show (GitLab.statistics_counts_opened (GitLab.statistics_counts (GitLab.statistics n))))
+  (_n,body) <- issuesWithoutLabels s p
+  return $ Card Default body
+
+issuesWithoutLabels :: State -> GitLab.Project -> IO (Word, Html ())
+issuesWithoutLabels s p = do
+  Just stats <- getNoLabelIssueCount s p
+  let n = GitLab.statistics_counts_opened (GitLab.statistics_counts (GitLab.statistics stats))
+  let body = do
+        "Issues without any label: "
+        a_ [ target_ "_blank"
+           , href_ "https://gitlab.haskell.org/ghc/ghc/-/issues?scope=all&state=opened&label_name[]=None"] do
+          toHtml (show n)
+          "#"
+  return (n,body)
 
 
 -- | Show labels with the number of issues/MRs
@@ -111,14 +119,27 @@ cardBackports s p = do
     h2_ "Backports"
     labelList labels
 
--- | Show HQ Shepherd labels
-cardHQShepherd :: State -> GitLab.Project -> IO (Maybe Card)
-cardHQShepherd s p = do
-  label <- getHQShepherd s p
-  if labelIsUsed label
-    then return $ Just $ Card Default do
-      labelShow label
-    else return Nothing
+-- | Show important labels
+cardLabelHighlights :: State -> GitLab.Project -> IO (Maybe Card)
+cardLabelHighlights s p = do
+  hq <- searchLabels s p "HQ shepherd"
+  triage <- searchLabels s p "needs triage"
+
+  let ls' = fmap labelShow
+            $ filter labelIsUsed
+            $ mconcat [hq,triage]
+
+  (n,bdy) <- issuesWithoutLabels s p
+  let ls | n > 0     = bdy:ls'
+         | otherwise = ls'
+
+  case ls of
+    [] -> return Nothing
+    xs -> return $ Just $ Card Default do
+            h2_ "Highlighted labels"
+            ul_ $ forM_ xs li_
+
+
 
 -- | Show master pipelines
 cardMasterPipelines :: State -> GitLab.Project -> IO Card

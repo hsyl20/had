@@ -140,10 +140,10 @@ app mstate request respond = do
    [] -> do
       state <- readMVar mstate
       p <- getGhcProject state
-      mcard_hqsheperd <- cardHQShepherd state p
+      mcard_hlabels <- cardLabelHighlights state p
       card_pipes <- cardMasterPipelines state p
       let cards = mconcat
-            [ maybeToList mcard_hqsheperd
+            [ maybeToList mcard_hlabels
             , [ card_pipes ]
             ]
       respond $ htmlResponse $ layout menu cards

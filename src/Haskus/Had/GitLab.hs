@@ -63,11 +63,11 @@ getBackportLabels s p = gitlabRequest s (gitlabWithAttrsUnsafe path opts)
     path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/labels"
     opts = "&with_counts=true&search=backport"
 
-getHQShepherd :: State -> Project -> IO Label
-getHQShepherd s p = head <$> gitlabRequest s (gitlabWithAttrsUnsafe path opts)
+searchLabels :: State -> Project -> Text.Text -> IO [Label]
+searchLabels s p t = gitlabRequest s (gitlabWithAttrsUnsafe path opts)
   where
     path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/labels"
-    opts = "&with_counts=true&search=HQ shepherd"
+    opts = "&with_counts=true&search=" <> t
 
 getCommitPipelines :: State -> Project -> ID -> IO [Pipeline]
 getCommitPipelines s p commit_sha = gitlabRequest s (gitlabWithAttrsUnsafe path opts)
