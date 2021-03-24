@@ -4,8 +4,10 @@
 
 module Haskus.Had.GitLab where
 
+import qualified Data.Text.Lazy as LText
 import qualified Data.Text as Text
 
+import Lucid
 import GitLab
 import GitLab.WebRequests.GitLabWebCalls
 
@@ -66,3 +68,16 @@ getHQShepherd s p = head <$> gitlabRequest s (gitlabWithAttrsUnsafe path opts)
   where
     path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/labels"
     opts = "&with_counts=true&search=HQ shepherd"
+
+getCommitPipelines :: State -> Project -> ID -> IO [Pipeline]
+getCommitPipelines s p commit_sha = gitlabRequest s (gitlabWithAttrsUnsafe path opts)
+  where
+    path = "/projects/" <> Text.pack (show (GitLab.project_id p)) <> "/pipelines"
+    opts = "&sha="<> LText.toStrict commit_sha
+
+
+pipelineLink :: Pipeline -> Html () -> Html ()
+pipelineLink p body =
+  a_ [ href_ $ "https://gitlab.haskell.org/ghc/ghc/-/pipelines/" <> Text.pack (show (GitLab.pipeline_id p))
+     , target_ "_blank"
+     ] body

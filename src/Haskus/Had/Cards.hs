@@ -11,11 +11,13 @@ import Control.Monad
 import Lucid
 import qualified GitLab
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as LText
 import qualified Data.List as List
 
 import Haskus.Had.State
 import Haskus.Had.GitLab
 import Haskus.Had.Misc
+import Haskus.Had.Git
 
 -- | Show the number of forks for the given project
 cardForks :: GitLab.Project -> Card
@@ -117,3 +119,24 @@ cardHQShepherd s p = do
     then return $ Just $ Card Col do
       labelShow label
     else return Nothing
+
+-- | Show master pipelines
+cardMasterPipelines :: State -> GitLab.Project -> IO Card
+cardMasterPipelines s p = do
+  pipes <- forM (take 10 $ stateLastCommits s) \(sha,_) -> do
+    pis <- getCommitPipelines s p sha
+    return (sha,pis)
+  return $ Card Col do
+    h2_ "Pipelines on master"
+    ul_ $ forM_ pipes \(sha,pis) -> do
+      li_ $ do
+        commitLink sha $ toHtml (LText.take 8 sha)
+        let show_state pip = do
+              pipelineLink pip do
+                toHtml (GitLab.pipeline_status pip)
+        case pis of
+          []    -> " - None"
+          [pip] -> " - " <> show_state pip
+          _     -> do
+            " - "
+            sequence_ (List.intersperse " / " $ map show_state pis)

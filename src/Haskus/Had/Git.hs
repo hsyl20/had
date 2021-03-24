@@ -87,6 +87,10 @@ renderCommit state (cid,summary) = do
             a_ [href_ $ "/note/" <> Text.toStrict note_id] $ "Perf report"
          Nothing -> "Perf report not available"
       " - "
-      a_ [ href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid
-         , target_ "_blank"
-         ] $ "Gitlab"
+      commitLink cid "Gitlab"
+
+commitLink :: ID -> Html () -> Html ()
+commitLink cid body =
+  a_ [ href_ $ "https://gitlab.haskell.org/ghc/ghc/-/commit/" <> Text.toStrict cid
+     , target_ "_blank"
+     ] body

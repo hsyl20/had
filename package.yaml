@@ -30,6 +30,7 @@ dependencies:
 - http-client
 - http-client-tls
 - async
+- aeson
 
 executables:
   had:
