@@ -30,5 +30,5 @@ getOptions = execParser opts
   where
     opts = info (helper <*> options)
       ( fullDesc
-     <> progDesc "GHC developer tool"
-     <> header "HAD" )
+     <> progDesc "GHC dashboard"
+     <> header "GHC-DASHBOARD" )

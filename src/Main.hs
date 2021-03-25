@@ -245,7 +245,7 @@ htmlWrap :: Html () -> Html ()
 htmlWrap body = do
    html_ do
       head_ do
-         title_ "HAD"
+         title_ "GHC devs dashboard"
          meta_ [ httpEquiv_ "Content-Type"
                , content_   "text/html;charset=utf-8"
                ]
