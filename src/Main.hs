@@ -127,7 +127,6 @@ newState gitlab_token opts = do
 menu :: [MenuEntry]
 menu =
     [ MenuEntry "/performance" "Performance"
-    , MenuEntry "/releases" "Releases"
     , MenuEntry "/repository" "Repository"
     , MenuEntry "/labels" "Labels"
     ]
@@ -138,13 +137,16 @@ app mstate request respond = do
 
   case pathInfo request of
    [] -> do
+      -- default page
       state <- readMVar mstate
       p <- getGhcProject state
       mcard_hlabels <- cardLabelHighlights state p
       card_pipes <- cardMasterPipelines state p
+      card_milestones <- cardMilestones state p
+      card_backports <- cardBackports state p
       let cards = mconcat
             [ maybeToList mcard_hlabels
-            , [ card_pipes ]
+            , [ card_milestones, card_backports, card_pipes ]
             ]
       respond $ htmlResponse $ layout menu cards
 
@@ -155,16 +157,6 @@ app mstate request respond = do
       card_nolabel <- cardIssuesWithoutLabels state p
       let cards = [ card_nolabel
                   , card_labels
-                  ]
-      respond $ htmlResponse $ layout menu cards
-
-   ["releases"] -> do
-      state <- readMVar mstate
-      p <- getGhcProject state
-      card_milestones <- cardMilestones state p
-      card_backports <- cardBackports state p
-      let cards = [ card_milestones
-                  , card_backports
                   ]
       respond $ htmlResponse $ layout menu cards
 
