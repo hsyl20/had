@@ -56,8 +56,19 @@ gitLastCommits n = do
 
 gitShowObject :: Show a => a -> IO ByteString
 gitShowObject obj = do
-   (_exitCode,res,_err) <- readProcess (shell ("git show " <> show obj))
+   (_exitCode,res,_err) <- readProcess (shell ("git show" <> show obj))
    return res
+
+gitShowCommit :: Show a => a -> IO ByteString
+gitShowCommit obj = do
+   (_exitCode,res,_err) <- readProcess (shell ("git show --patch --format=\"Commit:  %H%nAuthor: %an <%aL@...>%nDate:    %ci%nSubject: %s%n%n%b%n\" " <> show obj))
+   return res
+
+gitCommitSummary :: ID -> IO Text
+gitCommitSummary obj = do
+   let cmd = shell ("git show --no-patch --format=\"Commit:  %H%nAuthor: %an <%aL@...>%nDate:    %ci%nSubject: %s%n%n%b\" " <> show obj)
+   (_exitCode,res,_err) <- readProcess cmd
+   return $ Text.decodeUtf8 res
 
 gitObjectSummary :: ID -> IO Text
 gitObjectSummary obj = do
@@ -80,7 +91,7 @@ renderCommit state (cid,summary) = do
       toHtml summary
    hr_ []
    div_ do
-      a_ [href_ $ "/show/" <> Text.toStrict cid] $ "Diff"
+      a_ [href_ $ "/commit/" <> Text.toStrict cid <> "/raw"] $ "Diff"
       " - "
       case Map.lookup cid notes of
          Just (Note note_id _) -> do

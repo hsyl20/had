@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Haskus.Had.Perf where
 
@@ -242,7 +243,8 @@ renderNote note = do
 parseNote :: ID -> ByteString -> Note
 parseNote nid bs = Note nid
    $ Map.fromListWith (Map.union)
-   $ fmap (\[r,n,w,m,v] -> (Text.decodeUtf8 r, Map.singleton
+   $ fmap (\case
+      [r,n,w,m,v] -> (Text.decodeUtf8 r, Map.singleton
                                  ( TestId
                                     { testName = Text.decodeUtf8 n
                                     , testWay  = Text.decodeUtf8 w
@@ -262,7 +264,9 @@ parseNote nid bs = Note nid
                                  ( case LBS.readInteger v of
                                     Nothing -> error ("Invalid metric value: " <> show v)
                                     Just (x,_)  -> fromIntegral x
-                                 )))
+                                 ))
+      xs -> error $ "Unexpected perf note format: " ++ show xs
+      )
    $ filter (not . null)
    $ fmap (LBS.split (fromIntegral (ord '\t')))
    $ LBS.split (fromIntegral (ord '\n')) bs

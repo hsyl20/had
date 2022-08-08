@@ -70,7 +70,7 @@ newState gitlab_token opts = do
    let ncommits = opt_ncommits opts
    putStrLn $ "Get latest " <> show ncommits <> " commits..."
    latest_ids <- gitLastCommits ncommits
-   summaries <- forM latest_ids gitObjectSummary
+   summaries <- forM latest_ids gitCommitSummary
    let latests = latest_ids `zip` summaries
 
    putStrLn "Fetch perf notes..."
@@ -184,9 +184,16 @@ app mstate request respond = do
    ["commit",cid] -> do
       state <- readMVar mstate
       let cid' = LText.fromStrict cid
-      summary <- gitObjectSummary cid'
+      summary <- gitCommitSummary cid'
       let html = renderCommit state (cid',summary)
       respond $ htmlResponse html
+
+   ["commit",cid,"raw"] -> do
+      res <- gitShowCommit cid
+      respond $ responseLBS
+         status200
+         [("Content-Type", "text/plain")]
+         res
 
    ["script","chart.js"] -> do
       respond $ responseLBS
@@ -206,12 +213,13 @@ app mstate request respond = do
          [("Content-Type", "text/css")]
          (LBS.fromStrict styleCss)
 
-   ["show",obj] -> do
-      res <- gitShowObject obj
-      respond $ responseLBS
-         status200
-         [("Content-Type", "text/plain")]
-         res
+   -- disabled as it allows to show commit author emails
+   -- ["gitraw",obj] -> do
+   --    res <- gitShowObject obj
+   --    respond $ responseLBS
+   --       status200
+   --       [("Content-Type", "text/plain")]
+   --       res
 
    ["note",obj] -> do
       res <- gitShowObject obj
