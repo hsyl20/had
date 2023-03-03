@@ -122,12 +122,19 @@ cardBackports s p = do
 -- | Show important labels
 cardLabelHighlights :: State -> GitLab.Project -> IO (Maybe Card)
 cardLabelHighlights s p = do
-  hq <- searchLabels s p "HQ shepherd"
-  triage <- searchLabels s p "needs triage"
+  -- labels to highlight
+  let hl_labels =
+        [ "HQ shepherd"
+        , "needs triage"
+        , "javascript"
+        , "compiler perf"
+        ]
+
+  lbs_infos <- mapM (searchLabels s p) hl_labels
 
   let ls' = fmap labelShow
             $ filter labelIsUsed
-            $ mconcat [hq,triage]
+            $ mconcat lbs_infos
 
   (n,bdy) <- issuesWithoutLabels s p
   let ls | n > 0     = bdy:ls'
